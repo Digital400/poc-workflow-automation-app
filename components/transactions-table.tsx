@@ -7,9 +7,6 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  SortingState,
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
@@ -42,6 +39,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 import { Transaction } from "@/lib/types"
+import { formatCurrency } from "@/lib/utils"
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -72,72 +70,129 @@ interface TransactionsTableProps {
   data: Transaction[]
   onViewTransaction: (transaction: Transaction) => void
   onEditTransaction: (transaction: Transaction) => void
+  currentPage: number
+  totalPages: number
+  pageSize: number
+  totalRecords: number
+  searchTerm: string
+  loading?: boolean
+  sortBy: string
+  sortOrder: 'asc' | 'desc'
+  onPageChange: (page: number) => void
+  onPageSizeChange: (pageSize: number) => void
+  onSearchChange: (search: string) => void
+  onSortChange: (sortBy: string, sortOrder: 'asc' | 'desc') => void
 }
 
-export function TransactionsTable({ data, onViewTransaction, onEditTransaction }: TransactionsTableProps) {
-  const [sorting, setSorting] = React.useState<SortingState>([])
+export function TransactionsTable({ 
+  data, 
+  onViewTransaction, 
+  onEditTransaction,
+  currentPage,
+  totalPages,
+  pageSize,
+  totalRecords,
+  searchTerm,
+  loading = false,
+  sortBy,
+  sortOrder,
+  onPageChange,
+  onPageSizeChange,
+  onSearchChange,
+  onSortChange
+}: TransactionsTableProps) {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
 
   const columns: ColumnDef<Transaction>[] = [
     {
-      accessorKey: "integrationService",
-      header: ({ column }) => {
+      accessorKey: "id",
+      header: () => {
+        const isSorted = sortBy === 'id'
+        const isAsc = sortOrder === 'asc'
         return (
           <Button
             variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            onClick={() => onSortChange('id', isSorted && isAsc ? 'desc' : 'asc')}
           >
-            Integration Services
-            <ArrowUpDown className="ml-2 h-4 w-4" />
+            TransactionId
+            <ArrowUpDown className={`ml-2 h-4 w-4 ${isSorted ? 'opacity-100' : 'opacity-50'}`} />
           </Button>
         )
       },
-      cell: ({ row }) => <div className="font-medium">{row.getValue("integrationService")}</div>,
+      cell: ({ row }) => <div className="font-mono text-sm">{row.getValue("id")}</div>,
     },
     {
       accessorKey: "purchaseOrderReference",
-      header: ({ column }) => {
+      header: () => {
+        const isSorted = sortBy === 'purchaseOrderReference'
+        const isAsc = sortOrder === 'asc'
         return (
           <Button
             variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            onClick={() => onSortChange('purchaseOrderReference', isSorted && isAsc ? 'desc' : 'asc')}
           >
             Purchase Order
-            <ArrowUpDown className="ml-2 h-4 w-4" />
+            <ArrowUpDown className={`ml-2 h-4 w-4 ${isSorted ? 'opacity-100' : 'opacity-50'}`} />
           </Button>
         )
       },
       cell: ({ row }) => <div className="font-mono text-sm">{row.getValue("purchaseOrderReference") || "N/A"}</div>,
     },
     {
-      accessorKey: "customerName",
-      header: "Customer",
-      cell: ({ row }) => <div className="text-sm">{row.getValue("customerName") || "N/A"}</div>,
+      accessorKey: "referenceValue",
+      header: "Customer Email",
+      cell: ({ row }) => <div className="text-sm">{row.getValue("referenceValue") || "N/A"}</div>,
     },
     {
       accessorKey: "orderTotal",
-      header: "Total",
+      header: () => {
+        const isSorted = sortBy === 'orderTotal'
+        const isAsc = sortOrder === 'asc'
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => onSortChange('orderTotal', isSorted && isAsc ? 'desc' : 'asc')}
+          >
+            Total
+            <ArrowUpDown className={`ml-2 h-4 w-4 ${isSorted ? 'opacity-100' : 'opacity-50'}`} />
+          </Button>
+        )
+      },
       cell: ({ row }) => {
         const total = row.getValue("orderTotal") as number
-        return <div className="text-sm font-medium">${total?.toFixed(2) || "0.00"}</div>
+        return <div className="text-sm font-medium">{formatCurrency(total)}</div>
       },
     },
     {
       accessorKey: "status",
-      header: "Status",
+      header: () => {
+        const isSorted = sortBy === 'status'
+        const isAsc = sortOrder === 'asc'
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => onSortChange('status', isSorted && isAsc ? 'desc' : 'asc')}
+          >
+            Status
+            <ArrowUpDown className={`ml-2 h-4 w-4 ${isSorted ? 'opacity-100' : 'opacity-50'}`} />
+          </Button>
+        )
+      },
       cell: ({ row }) => getStatusBadge(row.getValue("status")),
     },
     {
       accessorKey: "createdOn",
-      header: ({ column }) => {
+      header: () => {
+        const isSorted = sortBy === 'createdOn'
+        const isAsc = sortOrder === 'asc'
         return (
           <Button
             variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            onClick={() => onSortChange('createdOn', isSorted && isAsc ? 'desc' : 'asc')}
           >
             Created On
-            <ArrowUpDown className="ml-2 h-4 w-4" />
+            <ArrowUpDown className={`ml-2 h-4 w-4 ${isSorted ? 'opacity-100' : 'opacity-50'}`} />
           </Button>
         )
       },
@@ -183,28 +238,18 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
   const table = useReactTable({
     data,
     columns,
-    onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     state: {
-      sorting,
       columnFilters,
       columnVisibility,
     },
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
+    // Remove pagination and sorting from TanStack Table since we're using server-side pagination and sorting
   })
 
   const generatePaginationItems = () => {
-    const currentPage = table.getState().pagination.pageIndex
-    const totalPages = table.getPageCount()
     const items = []
 
     // Previous button
@@ -214,37 +259,40 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
           href="#" 
           onClick={(e) => {
             e.preventDefault()
-            table.previousPage()
+            if (currentPage > 1) {
+              onPageChange(currentPage - 1)
+            }
           }}
+          className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
         />
       </PaginationItem>
     )
 
     // Page numbers
     const maxVisiblePages = 5
-    let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2))
-    const endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1)
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+    const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
 
     if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(0, endPage - maxVisiblePages + 1)
+      startPage = Math.max(1, endPage - maxVisiblePages + 1)
     }
 
     // First page
-    if (startPage > 0) {
+    if (startPage > 1) {
       items.push(
         <PaginationItem key="1">
           <PaginationLink 
             href="#" 
             onClick={(e) => {
               e.preventDefault()
-              table.setPageIndex(0)
+              onPageChange(1)
             }}
           >
             1
           </PaginationLink>
         </PaginationItem>
       )
-      if (startPage > 1) {
+      if (startPage > 2) {
         items.push(
           <PaginationItem key="ellipsis1">
             <PaginationEllipsis />
@@ -256,24 +304,24 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
     // Visible pages
     for (let i = startPage; i <= endPage; i++) {
       items.push(
-        <PaginationItem key={i + 1}>
+        <PaginationItem key={i}>
           <PaginationLink 
             href="#" 
             isActive={currentPage === i}
             onClick={(e) => {
               e.preventDefault()
-              table.setPageIndex(i)
+              onPageChange(i)
             }}
           >
-            {i + 1}
+            {i}
           </PaginationLink>
         </PaginationItem>
       )
     }
 
     // Last page
-    if (endPage < totalPages - 1) {
-      if (endPage < totalPages - 2) {
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
         items.push(
           <PaginationItem key="ellipsis2">
             <PaginationEllipsis />
@@ -286,7 +334,7 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
             href="#" 
             onClick={(e) => {
               e.preventDefault()
-              table.setPageIndex(totalPages - 1)
+              onPageChange(totalPages)
             }}
           >
             {totalPages}
@@ -302,8 +350,11 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
           href="#" 
           onClick={(e) => {
             e.preventDefault()
-            table.nextPage()
+            if (currentPage < totalPages) {
+              onPageChange(currentPage + 1)
+            }
           }}
+          className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
         />
       </PaginationItem>
     )
@@ -316,10 +367,8 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
       <div className="flex items-center py-4">
         <Input
           placeholder="Filter by purchase order, customer, or integration..."
-          value={(table.getColumn("purchaseOrderReference")?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn("purchaseOrderReference")?.setFilterValue(event.target.value)
-          }
+          value={searchTerm}
+          onChange={(event) => onSearchChange(event.target.value)}
           className="max-w-sm"
         />
         <DropdownMenu>
@@ -370,7 +419,19 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {loading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mr-2"></div>
+                    Loading transactions...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
@@ -403,23 +464,22 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
         <div className="flex items-center space-x-2">
           <p className="text-sm font-medium">Rows per page</p>
           <select
-            value={table.getState().pagination.pageSize}
+            value={pageSize}
             onChange={(e) => {
-              table.setPageSize(Number(e.target.value))
+              onPageSizeChange(Number(e.target.value))
             }}
             className="h-8 w-16 rounded border border-input bg-background px-2 py-1 text-sm"
           >
-            {[10, 20, 30, 40, 50].map((pageSize) => (
-              <option key={pageSize} value={pageSize}>
-                {pageSize}
+            {[10, 20, 30, 40, 50].map((size) => (
+              <option key={size} value={size}>
+                {size}
               </option>
             ))}
           </select>
         </div>
         <div className="flex items-center space-x-6 lg:space-x-8">
           <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-            Page {table.getState().pagination.pageIndex + 1} of{" "}
-            {table.getPageCount()}
+            Page {currentPage} of {totalPages}
           </div>
           <div className="flex items-center space-x-2">
             <Pagination>
@@ -430,7 +490,7 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
           </div>
         </div>
         <div className="text-sm text-muted-foreground">
-          {table.getFilteredRowModel().rows.length} of {table.getCoreRowModel().rows.length} row(s) total.
+          {data.length} of {totalRecords} row(s) total.
         </div>
       </div>
     </div>

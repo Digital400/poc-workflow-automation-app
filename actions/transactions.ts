@@ -68,7 +68,9 @@ export function mapDBTransactionToFrontend(dbTransaction: DBTransaction) {
 export async function getTransactions(
   page: number = 1,
   pageSize: number = 10,
-  search?: string
+  search?: string,
+  sortBy: string = 'createdOn',
+  sortOrder: string = 'desc'
 ): Promise<{ transactions: Transaction[], total: number }> {
   try {
     const connection = await getConnection()
@@ -97,12 +99,38 @@ export async function getTransactions(
     
     // Get paginated data
     const offset = (page - 1) * pageSize
+    
+    // Map frontend column names to database column names
+    const sortColumnMap: { [key: string]: string } = {
+      'id': 'TransactionId',
+      'purchaseOrderReference': 'JSON',
+      'referenceValue': 'reference_value',
+      'orderTotal': 'JSON',
+      'status': 'JSON',
+      'createdOn': 'created_on',
+      'integrationService': 'Integration'
+    }
+    
+    const sortColumn = sortColumnMap[sortBy] || 'created_on'
+    const orderDirection = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+    
+    let orderByClause = `ORDER BY ${sortColumn} ${orderDirection}`
+    
+    // Special handling for JSON fields that need to be extracted
+    if (sortBy === 'purchaseOrderReference') {
+      orderByClause = `ORDER BY JSON_VALUE(JSON, '$.purchaseOrderReference') ${orderDirection}`
+    } else if (sortBy === 'orderTotal') {
+      orderByClause = `ORDER BY CAST(JSON_VALUE(JSON, '$.totalPriceWithGst') AS FLOAT) ${orderDirection}`
+    } else if (sortBy === 'status') {
+      orderByClause = `ORDER BY JSON_VALUE(JSON, '$.cardDetails.responseText') ${orderDirection}`
+    }
+    
     const query = `
       SELECT TransactionId, Integration, reference_key, reference_value, 
              blob_path, created_on, JSON
       FROM Transactions 
       ${whereClause}
-      ORDER BY created_on DESC
+      ${orderByClause}
       OFFSET @offset ROWS
       FETCH NEXT @pageSize ROWS ONLY
     `

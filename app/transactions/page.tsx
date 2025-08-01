@@ -18,6 +18,12 @@ export default function TransactionsPage() {
     currentPage,
     pageSize,
     searchTerm,
+    totalPages,
+    sortBy,
+    sortOrder,
+    setPageSize,
+    setSearchTerm,
+    setSorting,
     fetchTransactions,
     updateTransaction,
     deleteTransaction,
@@ -27,6 +33,7 @@ export default function TransactionsPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [drawerMode, setDrawerMode] = useState<"view" | "edit">("view")
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm)
 
   const handleViewTransaction = (transaction: Transaction) => {
     setSelectedTransaction(transaction)
@@ -74,6 +81,15 @@ export default function TransactionsPage() {
     fetchTransactions(currentPage, pageSize, searchTerm)
     fetchStats()
   }
+
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchTransactions(1, pageSize, debouncedSearchTerm)
+    }, 500) // 500ms delay
+
+    return () => clearTimeout(timer)
+  }, [debouncedSearchTerm, pageSize, fetchTransactions])
 
   useEffect(() => {
     console.log(transactions)
@@ -139,6 +155,24 @@ export default function TransactionsPage() {
         data={transactions}
         onViewTransaction={handleViewTransaction}
         onEditTransaction={handleEditTransaction}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalRecords={stats?.total || 0}
+        searchTerm={searchTerm}
+        loading={loading}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onPageChange={(page) => fetchTransactions(page, pageSize, searchTerm, sortBy, sortOrder)}
+        onPageSizeChange={(newPageSize) => {
+          setPageSize(newPageSize)
+          fetchTransactions(1, newPageSize, searchTerm, sortBy, sortOrder)
+        }}
+        onSearchChange={(search) => {
+          setSearchTerm(search)
+          setDebouncedSearchTerm(search)
+        }}
+        onSortChange={setSorting}
       />
 
       <TransactionDetailDrawer

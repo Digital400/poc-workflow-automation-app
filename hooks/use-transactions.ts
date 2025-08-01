@@ -18,13 +18,16 @@ interface UseTransactionsReturn {
   currentPage: number
   pageSize: number
   searchTerm: string
-  fetchTransactions: (page?: number, size?: number, search?: string) => Promise<void>
+  sortBy: string
+  sortOrder: 'asc' | 'desc'
+  fetchTransactions: (page?: number, size?: number, search?: string, sortBy?: string, sortOrder?: 'asc' | 'desc') => Promise<void>
   createTransaction: (data: Transaction) => Promise<void>
   updateTransaction: (id: string, data: Partial<Transaction>) => Promise<void>
   deleteTransaction: (id: string) => Promise<void>
   fetchStats: () => Promise<void>
   setSearchTerm: (term: string) => void
   setPageSize: (size: number) => void
+  setSorting: (sortBy: string, sortOrder: 'asc' | 'desc') => void
 }
 
 export function useTransactions(): UseTransactionsReturn {
@@ -36,8 +39,10 @@ export function useTransactions(): UseTransactionsReturn {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [searchTerm, setSearchTerm] = useState('')
+  const [sortBy, setSortBy] = useState('createdOn')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
-  const fetchTransactions = useCallback(async (page = 1, size = 10, search = '') => {
+  const fetchTransactions = useCallback(async (page = 1, size = 10, search = '', sortByParam = sortBy, sortOrderParam = sortOrder) => {
     setLoading(true)
     setError(null)
     
@@ -45,6 +50,8 @@ export function useTransactions(): UseTransactionsReturn {
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: size.toString(),
+        sortBy: sortByParam,
+        sortOrder: sortOrderParam,
         ...(search && { search })
       })
       
@@ -162,7 +169,13 @@ export function useTransactions(): UseTransactionsReturn {
   useEffect(() => {
     fetchTransactions(currentPage, pageSize, searchTerm)
     fetchStats()
-  }, [fetchTransactions, fetchStats, currentPage, pageSize, searchTerm])
+  }, []) // Only run on mount
+
+  const setSorting = useCallback((newSortBy: string, newSortOrder: 'asc' | 'desc') => {
+    setSortBy(newSortBy)
+    setSortOrder(newSortOrder)
+    fetchTransactions(1, pageSize, searchTerm, newSortBy, newSortOrder)
+  }, [pageSize, searchTerm, fetchTransactions])
 
   return {
     transactions,
@@ -173,6 +186,8 @@ export function useTransactions(): UseTransactionsReturn {
     currentPage,
     pageSize,
     searchTerm,
+    sortBy,
+    sortOrder,
     fetchTransactions,
     createTransaction,
     updateTransaction,
@@ -180,5 +195,6 @@ export function useTransactions(): UseTransactionsReturn {
     fetchStats,
     setSearchTerm,
     setPageSize,
+    setSorting,
   }
 } 
