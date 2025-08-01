@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { FileText, Download, ZoomIn, ZoomOut } from "lucide-react"
 
@@ -11,6 +11,9 @@ interface DocumentPreviewProps {
 
 export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps) {
   const [zoomLevel, setZoomLevel] = useState<number>(1)
+  const [isLoading, setIsLoading] = useState(false)
+  const [hasError, setHasError] = useState(false)
+  const [useProxy, setUseProxy] = useState(true)
 
   const handleZoomIn = () => {
     setZoomLevel(prev => Math.min(prev + 0.2, 3))
@@ -26,13 +29,42 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
     }
   }
 
+  // Create proxy URL for PDF display
+  const getProxyUrl = (url: string) => {
+    if (!url || url.trim() === "") return ""
+    return `/api/pdf-proxy?url=${encodeURIComponent(url)}`
+  }
+
+  // Try original URL first, then fallback to proxy if needed
+  const getPdfUrl = (url: string) => {
+    if (!url || url.trim() === "") return ""
+    // Use proxy to handle content-disposition issues
+    return useProxy ? getProxyUrl(url) : url
+  }
+
+  // Reset error state when PDF URL changes
+  useEffect(() => {
+    setHasError(false)
+    setIsLoading(true)
+    setUseProxy(true) // Reset to use proxy by default
+    console.log('PDF URL changed:', pdfUrl)
+    if (pdfUrl) {
+      console.log('Proxy URL:', getPdfUrl(pdfUrl))
+    }
+  }, [pdfUrl])
+
   return (
     <div className={`p-4 space-y-4 bg-white border rounded-lg ${className}`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4" />
-          <span className="font-medium">Document Preview</span>
-        </div>
+              <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            <span className="font-medium">Document Preview</span>
+            {pdfUrl && (
+              <span className="text-xs text-muted-foreground">
+                ({useProxy ? 'via proxy' : 'direct'})
+              </span>
+            )}
+          </div>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -72,8 +104,25 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
       <div className="border rounded-lg overflow-hidden bg-gray-50">
         {pdfUrl && pdfUrl.trim() !== "" ? (
           <div className="relative overflow-auto" style={{ height: '500px' }}>
+            {isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
+                  <p className="text-sm text-muted-foreground">Loading PDF...</p>
+                </div>
+              </div>
+            )}
+            {hasError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                <div className="text-center">
+                  <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm text-red-600">Failed to load PDF</p>
+                  <p className="text-xs text-muted-foreground">The document may be unavailable or restricted</p>
+                </div>
+              </div>
+            )}
             <iframe
-              src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH&zoom=${Math.round(zoomLevel * 100)}`}
+              src={`${getPdfUrl(pdfUrl)}#toolbar=0&navpanes=0&scrollbar=0&view=FitH&zoom=${Math.round(zoomLevel * 100)}`}
               className="w-full h-full border-0"
               style={{
                 minHeight: `${500 * zoomLevel}px`,
@@ -81,8 +130,19 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
               }}
               title="PDF Document"
               onLoad={(e) => {
-                // Prevent any automatic downloads
-                e.preventDefault()
+                setIsLoading(false)
+                setHasError(false)
+              }}
+              onError={() => {
+                setIsLoading(false)
+                if (useProxy) {
+                  // Try original URL as fallback
+                  console.log('Proxy failed, trying original URL')
+                  setUseProxy(false)
+                  setIsLoading(true)
+                } else {
+                  setHasError(true)
+                }
               }}
             />
           </div>
