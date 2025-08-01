@@ -817,7 +817,7 @@ export function TransactionDetailDrawer({
                       
                       return (
                         <div key={mapping.field} className={`p-3 border rounded-lg bg-muted/30 ${
-                          hasEmailError ? 'border-red-500 bg-red-50' : ''
+                          hasEmailError ? 'border-destructive bg-destructive/10' : ''
                         }`}>
                         <div className="flex items-center justify-between mb-2">
                           <Label className="text-sm font-medium">
@@ -959,7 +959,7 @@ export function TransactionDetailDrawer({
                       
                       return (
                         <div key={mapping.field} className={`p-3 border rounded-lg bg-muted/30 ${
-                          hasEmailError ? 'border-red-500 bg-red-50' : ''
+                          hasEmailError ? 'border-destructive bg-destructive/10' : ''
                         }`}>
                         <div className="flex items-center justify-between mb-2">
                           <Label className="text-sm font-medium">
