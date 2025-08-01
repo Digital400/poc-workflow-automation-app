@@ -78,7 +78,15 @@ export default function TransactionsPage() {
         }
       }
       
-      setIsDrawerOpen(false)
+      // Refresh the data to show the updated transaction
+      await fetchTransactions(currentPage, pageSize, searchTerm, sortBy, sortOrder)
+      
+      // Update the selected transaction with the new data
+      const updatedTransactionFromServer = transactions.find(t => t.id === updatedTransaction.id)
+      if (updatedTransactionFromServer) {
+        setSelectedTransaction(updatedTransactionFromServer)
+      }
+      
     } catch (error) {
       console.error('Failed to update transaction:', error)
     }

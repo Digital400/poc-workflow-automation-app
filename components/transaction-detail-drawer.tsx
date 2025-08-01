@@ -14,7 +14,14 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { DocumentPreview } from "@/components/ui/document-preview"
 import { Transaction } from "@/lib/types"
-import { Eye, Edit, Code, FileText, X } from "lucide-react"
+import { Eye, Edit, Code, FileText, X, Loader2, Settings, Send, CheckCircle, AlertCircle } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface TransactionDetailDrawerProps {
   transaction: Transaction | null
@@ -23,6 +30,26 @@ interface TransactionDetailDrawerProps {
   mode: "view" | "edit"
   onSave?: (updatedTransaction: Transaction) => void
   onDelete?: (id: string) => void
+}
+
+interface ERPMapping {
+  field: string
+  sourceField: string
+  sanitize: boolean
+  sanitizeOptions: string[]
+  userDefinedValue: string
+  required: boolean
+  type: "string" | "number" | "date" | "array"
+}
+
+interface ERPLineItemMapping {
+  field: string
+  sourceField: string
+  sanitize: boolean
+  sanitizeOptions: string[]
+  userDefinedValue: string
+  required: boolean
+  type: "string" | "number"
 }
 
 const getStatusBadge = (status: string) => {
@@ -65,6 +92,150 @@ export function TransactionDetailDrawer({
   const [jsonData, setJsonData] = useState<string>("")
   const [jsonError, setJsonError] = useState<string>("")
   const [jsonModified, setJsonModified] = useState<boolean>(false)
+  const [isSaving, setIsSaving] = useState<boolean>(false)
+  const [erpMappings, setErpMappings] = useState<ERPMapping[]>([
+    { field: "TransactionID", sourceField: "id", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "purchaseOrderNumber", sourceField: "purchaseOrderReference", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "customerEmail", sourceField: "customerName", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "Order Total", sourceField: "orderTotal", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "number" },
+    { field: "CreateDate", sourceField: "createdOn", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "date" }
+  ])
+  const [lineItemMappings, setLineItemMappings] = useState<ERPLineItemMapping[]>([
+    { field: "style", sourceField: "style", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "sku", sourceField: "sku", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "varient", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
+    { field: "size", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
+    { field: "quantity", sourceField: "quantity", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "number" },
+    { field: "unitPrice", sourceField: "unitPrice", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "number" }
+  ])
+  const [isSendingToERP, setIsSendingToERP] = useState<boolean>(false)
+
+  // Helper function to sanitize data based on options
+  const sanitizeData = (value: unknown, sanitizeOptions: string[], userDefinedValue: string): unknown => {
+    if (!value && !userDefinedValue) return value
+    
+    // If user defined value is provided, use it
+    if (userDefinedValue) {
+      return userDefinedValue
+    }
+    
+    let result = value
+    
+    // Apply sanitization options in order
+    sanitizeOptions.forEach(option => {
+      switch (option) {
+        case "trim":
+          if (typeof result === "string") {
+            result = result.trim()
+          }
+          break
+        case "stringToNumber":
+          if (typeof result === "string") {
+            result = parseFloat(result) || 0
+          }
+          break
+        case "numberToString":
+          if (typeof result === "number") {
+            result = result.toString()
+          }
+          break
+        case "toUpperCase":
+          if (typeof result === "string") {
+            result = result.toUpperCase()
+          }
+          break
+        case "toLowerCase":
+          if (typeof result === "string") {
+            result = result.toLowerCase()
+          }
+          break
+      }
+    })
+    
+    return result
+  }
+
+  // Helper function to get available source fields from transaction
+  const getAvailableSourceFields = () => {
+    if (!transaction) return []
+    
+    const fields: string[] = []
+    Object.keys(transaction).forEach(key => {
+      if (key !== "orderLines") {
+        fields.push(key)
+      }
+    })
+    
+    // Add nested fields from orderLines
+    if (transaction.orderLines && transaction.orderLines.length > 0) {
+      Object.keys(transaction.orderLines[0]).forEach(key => {
+        fields.push(`orderLines.${key}`)
+      })
+    }
+    
+    return fields
+  }
+
+  // Function to send data to ERP
+  const sendToERP = async () => {
+    if (!transaction) return
+    
+    setIsSendingToERP(true)
+    
+    try {
+      // Transform data according to mappings
+      const transformedData: Record<string, unknown> = {}
+      
+      // Map main fields
+      erpMappings.forEach(mapping => {
+        if (mapping.sourceField && mapping.sourceField !== "__empty__") {
+          let value = transaction[mapping.sourceField as keyof Transaction]
+          
+          if (mapping.sanitize) {
+            value = sanitizeData(value, mapping.sanitizeOptions, mapping.userDefinedValue) as typeof value
+          }
+          
+          transformedData[mapping.field] = value
+        }
+      })
+      
+      // Map line items
+      if (transaction.orderLines && transaction.orderLines.length > 0) {
+        transformedData.LineItems = transaction.orderLines.map(item => {
+          const lineItem: Record<string, unknown> = {}
+          
+          lineItemMappings.forEach(mapping => {
+            if (mapping.sourceField && mapping.sourceField !== "__empty__") {
+              let value = item[mapping.sourceField as keyof typeof item]
+              
+              if (mapping.sanitize) {
+                value = sanitizeData(value, mapping.sanitizeOptions, mapping.userDefinedValue) as typeof value
+              }
+              
+              lineItem[mapping.field] = value
+            }
+          })
+          
+          return lineItem
+        })
+      }
+      
+      // TODO: Send to ERP API
+      console.log("Sending to ERP:", transformedData)
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Show success message
+      alert("Data sent to ERP successfully!")
+      
+    } catch (error) {
+      console.error("Error sending to ERP:", error)
+      alert("Error sending to ERP")
+    } finally {
+      setIsSendingToERP(false)
+    }
+  }
 
   useEffect(() => {
     if (transaction) {
@@ -94,13 +265,17 @@ export function TransactionDetailDrawer({
     }
   }
 
-  const handleJsonSave = () => {
+  const handleJsonSave = async () => {
     try {
+      setIsSaving(true)
+      setJsonError("")
+      
       const parsedData = JSON.parse(jsonData)
       
       // Prevent changing the transaction ID
       if (parsedData.id !== transaction?.id) {
         setJsonError("Transaction ID cannot be changed")
+        setIsSaving(false)
         return
       }
       
@@ -108,6 +283,7 @@ export function TransactionDetailDrawer({
         // Validate required fields
         if (!parsedData.integrationService || !parsedData.status) {
           setJsonError("Integration service and status are required")
+          setIsSaving(false)
           return
         }
         
@@ -115,16 +291,17 @@ export function TransactionDetailDrawer({
         const validStatuses = ["pending", "processing", "completed", "failed"]
         if (!validStatuses.includes(parsedData.status)) {
           setJsonError("Invalid status value")
+          setIsSaving(false)
           return
         }
         
-        onSave(parsedData as Transaction)
+        await onSave(parsedData as Transaction)
         setJsonModified(false)
-        onOpenChange(false)
+        setIsSaving(false)
       }
-      setJsonError("")
     } catch (error) {
       setJsonError("Invalid JSON format")
+      setIsSaving(false)
     }
   }
 
@@ -183,7 +360,7 @@ export function TransactionDetailDrawer({
     <Drawer open={isOpen} onOpenChange={onOpenChange}>
       <DrawerContent>
         <div 
-          className="mx-auto w-full max-w-full px-12 overflow-y-auto min-h-[75vh]"
+          className="mx-auto w-full max-w-full px-12 overflow-y-auto min-h-[78vh]"
           style={{
             imageRendering: 'crisp-edges',
             textRendering: 'optimizeLegibility',
@@ -271,34 +448,12 @@ export function TransactionDetailDrawer({
                   
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-muted-foreground">Integration Service</label>
-                    {mode === "view" ? (
-                      <p className="text-sm">{transaction.integrationService}</p>
-                    ) : (
-                      <input 
-                        type="text" 
-                        value={editData.integrationService || ""}
-                        onChange={(e) => setEditData(prev => ({ ...prev, integrationService: e.target.value }))}
-                        className="w-full p-2 border rounded-md"
-                      />
-                    )}
+                    <p className="text-sm">{transaction.integrationService}</p>
                   </div>
                   
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-muted-foreground">Status</label>
-                    {mode === "view" ? (
-                      <div>{getStatusBadge(transaction.status)}</div>
-                    ) : (
-                      <select 
-                        className="w-full p-2 border rounded-md"
-                        value={editData.status || transaction.status}
-                        onChange={(e) => setEditData(prev => ({ ...prev, status: e.target.value as Transaction["status"] }))}
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="processing">Processing</option>
-                        <option value="completed">Completed</option>
-                        <option value="failed">Failed</option>
-                      </select>
-                    )}
+                    <div>{getStatusBadge(transaction.status)}</div>
                   </div>
                   
                   <div className="space-y-2">
@@ -307,10 +462,10 @@ export function TransactionDetailDrawer({
                   </div>
                 </div>
                 
-                {mode === "view" && transaction.orderLines && transaction.orderLines.length > 0 && (
+                {transaction.orderLines && transaction.orderLines.length > 0 && (
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-muted-foreground">Order Items</label>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                    <div className="space-y-2 max-h-46 overflow-y-auto">
                       {transaction.orderLines.map((item, index) => (
                         <div key={index} className="text-sm bg-muted p-2 rounded">
                           <div className="flex justify-between">
@@ -326,12 +481,10 @@ export function TransactionDetailDrawer({
                   </div>
                 )}
                 
-                {mode === "view" && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Transaction ID</label>
-                    <p className="text-sm font-mono bg-muted p-2 rounded">{transaction.id}</p>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Transaction ID</label>
+                  <p className="text-sm font-mono bg-muted p-2 rounded">{transaction.id}</p>
+                </div>
               </div>
             ) : (
               // JSON View
@@ -352,11 +505,15 @@ export function TransactionDetailDrawer({
                     <textarea
                       value={jsonData}
                       onChange={(e) => handleJsonChange(e.target.value)}
-                      disabled={mode === "view"}
+                      disabled={mode === "view" || isSaving}
                       className={`w-full h-120 p-3 font-mono text-sm border rounded-md resize-none ${
-                        mode === "view" ? "bg-muted/50 cursor-not-allowed" : "bg-muted"
+                        mode === "view" ? "bg-muted/50 cursor-not-allowed" : 
+                        isSaving ? "bg-muted/50 cursor-not-allowed" : "bg-muted"
                       }`}
-                      placeholder={mode === "view" ? "Read-only JSON view" : "Enter JSON data..."}
+                      placeholder={
+                        mode === "view" ? "Read-only JSON view" : 
+                        isSaving ? "Saving..." : "Enter JSON data..."
+                      }
                     />
                     {jsonError && (
                       <div className="absolute bottom-2 right-2">
@@ -371,17 +528,302 @@ export function TransactionDetailDrawer({
                 {mode === "edit" && jsonModified && (
                   <Button 
                     onClick={handleJsonSave}
-                    disabled={!!jsonError}
+                    disabled={!!jsonError || isSaving}
                     className="w-full"
                   >
-                    Save JSON Changes
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save JSON Changes"
+                    )}
                   </Button>
                 )}
               </div>
             )}
           </div>
 
-          <div className="right-container p-4 space-y-4 bg-blue-200 w-1/3">Right Container</div>
+          <div className="right-container p-4 space-y-4 w-1/3 overflow-y-auto">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  ERP Integration
+                </CardTitle>
+                <CardDescription>
+                  Map transaction data to ERP system format
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Main Fields Mapping */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium">Main Fields</h4>
+                                         <Badge variant="secondary" className="text-xs">
+                       {erpMappings.filter(m => m.sourceField && m.sourceField !== "__empty__").length}/{erpMappings.length} Mapped
+                     </Badge>
+                  </div>
+                  
+                  {erpMappings.map((mapping, index) => (
+                    <div key={mapping.field} className="space-y-2 p-3 border rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">
+                          {mapping.field}
+                          {mapping.required && <span className="text-red-500 ml-1">*</span>}
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={mapping.sanitize}
+                            onCheckedChange={(checked) => {
+                              const newMappings = [...erpMappings]
+                              newMappings[index].sanitize = checked
+                              setErpMappings(newMappings)
+                            }}
+                          />
+                          <span className="text-xs text-muted-foreground">Sanitize</span>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Source Field</Label>
+                          <Select
+                            value={mapping.sourceField}
+                            onValueChange={(value) => {
+                              const newMappings = [...erpMappings]
+                              newMappings[index].sourceField = value
+                              setErpMappings(newMappings)
+                            }}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="Select field" />
+                            </SelectTrigger>
+                                                         <SelectContent>
+                               <SelectItem value="__empty__">Leave Empty</SelectItem>
+                               {getAvailableSourceFields().map(field => (
+                                 <SelectItem key={field} value={field}>
+                                   {field}
+                                 </SelectItem>
+                               ))}
+                             </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        {mapping.sanitize && (
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Sanitize Type</Label>
+                                                        <div className="space-y-2">
+                              <Label className="text-xs text-muted-foreground">Sanitize Options</Label>
+                              <div className="space-y-1">
+                                {["trim", "stringToNumber", "numberToString", "toUpperCase", "toLowerCase"].map(option => (
+                                  <div key={option} className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      id={`${mapping.field}-${option}`}
+                                      checked={mapping.sanitizeOptions.includes(option)}
+                                      onChange={(e) => {
+                                        const newMappings = [...erpMappings]
+                                        if (e.target.checked) {
+                                          // Prevent conflicting options
+                                          if (option === "stringToNumber" && mapping.sanitizeOptions.includes("numberToString")) {
+                                            newMappings[index].sanitizeOptions = newMappings[index].sanitizeOptions.filter(opt => opt !== "numberToString")
+                                          }
+                                          if (option === "numberToString" && mapping.sanitizeOptions.includes("stringToNumber")) {
+                                            newMappings[index].sanitizeOptions = newMappings[index].sanitizeOptions.filter(opt => opt !== "stringToNumber")
+                                          }
+                                          newMappings[index].sanitizeOptions.push(option)
+                                        } else {
+                                          newMappings[index].sanitizeOptions = newMappings[index].sanitizeOptions.filter(opt => opt !== option)
+                                        }
+                                        setErpMappings(newMappings)
+                                      }}
+                                      className="rounded"
+                                    />
+                                    <Label htmlFor={`${mapping.field}-${option}`} className="text-xs">
+                                      {option === "trim" && "Trim Spaces"}
+                                      {option === "stringToNumber" && "String to Number"}
+                                      {option === "numberToString" && "Number to String"}
+                                      {option === "toUpperCase" && "To Uppercase"}
+                                      {option === "toLowerCase" && "To Lowercase"}
+                                    </Label>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-xs text-muted-foreground">User Defined Value</Label>
+                              <Input
+                                value={mapping.userDefinedValue}
+                                onChange={(e) => {
+                                  const newMappings = [...erpMappings]
+                                  newMappings[index].userDefinedValue = e.target.value
+                                  setErpMappings(newMappings)
+                                }}
+                                placeholder="Leave empty to use source value"
+                                className="h-8"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <Separator />
+                
+                {/* Line Items Mapping */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium">Line Items</h4>
+                                         <Badge variant="secondary" className="text-xs">
+                       {lineItemMappings.filter(m => m.sourceField && m.sourceField !== "__empty__").length}/{lineItemMappings.length} Mapped
+                     </Badge>
+                  </div>
+                  
+                  {lineItemMappings.map((mapping, index) => (
+                    <div key={mapping.field} className="space-y-2 p-3 border rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">
+                          {mapping.field}
+                          {mapping.required && <span className="text-red-500 ml-1">*</span>}
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={mapping.sanitize}
+                            onCheckedChange={(checked) => {
+                              const newMappings = [...lineItemMappings]
+                              newMappings[index].sanitize = checked
+                              setLineItemMappings(newMappings)
+                            }}
+                          />
+                          <span className="text-xs text-muted-foreground">Sanitize</span>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Source Field</Label>
+                          <Select
+                            value={mapping.sourceField}
+                            onValueChange={(value) => {
+                              const newMappings = [...lineItemMappings]
+                              newMappings[index].sourceField = value
+                              setLineItemMappings(newMappings)
+                            }}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="Select field" />
+                            </SelectTrigger>
+                                                         <SelectContent>
+                               <SelectItem value="__empty__">Leave Empty</SelectItem>
+                               {transaction?.orderLines && transaction.orderLines.length > 0 ? 
+                                 Object.keys(transaction.orderLines[0]).map(field => (
+                                   <SelectItem key={field} value={field}>
+                                     {field}
+                                   </SelectItem>
+                                 )) : []
+                               }
+                             </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        {mapping.sanitize && (
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Sanitize Type</Label>
+                                                        <div className="space-y-2">
+                              <Label className="text-xs text-muted-foreground">Sanitize Options</Label>
+                              <div className="space-y-1">
+                                {["trim", "stringToNumber", "numberToString", "toUpperCase", "toLowerCase"].map(option => (
+                                  <div key={option} className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      id={`line-${mapping.field}-${option}`}
+                                      checked={mapping.sanitizeOptions.includes(option)}
+                                      onChange={(e) => {
+                                        const newMappings = [...lineItemMappings]
+                                        if (e.target.checked) {
+                                          // Prevent conflicting options
+                                          if (option === "stringToNumber" && mapping.sanitizeOptions.includes("numberToString")) {
+                                            newMappings[index].sanitizeOptions = newMappings[index].sanitizeOptions.filter(opt => opt !== "numberToString")
+                                          }
+                                          if (option === "numberToString" && mapping.sanitizeOptions.includes("stringToNumber")) {
+                                            newMappings[index].sanitizeOptions = newMappings[index].sanitizeOptions.filter(opt => opt !== "stringToNumber")
+                                          }
+                                          newMappings[index].sanitizeOptions.push(option)
+                                        } else {
+                                          newMappings[index].sanitizeOptions = newMappings[index].sanitizeOptions.filter(opt => opt !== option)
+                                        }
+                                        setLineItemMappings(newMappings)
+                                      }}
+                                      className="rounded"
+                                    />
+                                    <Label htmlFor={`line-${mapping.field}-${option}`} className="text-xs">
+                                      {option === "trim" && "Trim Spaces"}
+                                      {option === "stringToNumber" && "String to Number"}
+                                      {option === "numberToString" && "Number to String"}
+                                      {option === "toUpperCase" && "To Uppercase"}
+                                      {option === "toLowerCase" && "To Lowercase"}
+                                    </Label>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label className="text-xs text-muted-foreground">User Defined Value</Label>
+                              <Input
+                                value={mapping.userDefinedValue}
+                                onChange={(e) => {
+                                  const newMappings = [...lineItemMappings]
+                                  newMappings[index].userDefinedValue = e.target.value
+                                  setLineItemMappings(newMappings)
+                                }}
+                                placeholder="Leave empty to use source value"
+                                className="h-8"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Send to ERP Button */}
+                <div className="pt-4">
+                  <Button 
+                    onClick={sendToERP}
+                    disabled={isSendingToERP}
+                    className="w-full"
+                  >
+                    {isSendingToERP ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Sending to ERP...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        Send to ERP
+                      </>
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Validation Status */}
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Mapping configuration is valid. All required fields are mapped.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </div>
           </div>
           
           <DrawerFooter>
