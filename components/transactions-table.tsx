@@ -72,9 +72,10 @@ interface TransactionsTableProps {
   data: Transaction[]
   onViewTransaction: (transaction: Transaction) => void
   onEditTransaction: (transaction: Transaction) => void
+  loading?: boolean
 }
 
-export function TransactionsTable({ data, onViewTransaction, onEditTransaction }: TransactionsTableProps) {
+export function TransactionsTable({ data, onViewTransaction, onEditTransaction, loading = false }: TransactionsTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -103,12 +104,25 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
-            Reference ID
+            Purchase Order
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         )
       },
       cell: ({ row }) => <div className="font-mono text-sm">{row.getValue("referenceId")}</div>,
+    },
+    {
+      accessorKey: "customerName",
+      header: "Customer",
+      cell: ({ row }) => <div className="text-sm">{row.getValue("customerName") || "N/A"}</div>,
+    },
+    {
+      accessorKey: "orderTotal",
+      header: "Total",
+      cell: ({ row }) => {
+        const total = row.getValue("orderTotal") as number
+        return <div className="text-sm font-medium">${total?.toFixed(2) || "0.00"}</div>
+      },
     },
     {
       accessorKey: "status",
@@ -298,7 +312,7 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
     <div className="w-full">
       <div className="flex items-center py-4">
         <Input
-          placeholder="Filter by reference ID..."
+          placeholder="Filter by purchase order, customer, or integration..."
           value={(table.getColumn("referenceId")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
             table.getColumn("referenceId")?.setFilterValue(event.target.value)

@@ -4,6 +4,15 @@ export type Transaction = {
   referenceId: string
   status: "pending" | "processing" | "completed" | "failed"
   createdOn: string
+  customerName?: string
+  orderTotal?: number
+  orderLines?: Array<{
+    style: string
+    sku: string
+    quantity: number
+    unitPrice: number
+  }>
+  blobPath?: string
 }
 
 export const transactionData: Transaction[] = [
