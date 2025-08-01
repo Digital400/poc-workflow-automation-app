@@ -40,7 +40,6 @@ export default function DashboardPage() {
     successRate: 0,
     recentTransactions: [] as Transaction[]
   })
-  const [loading, setLoading] = useState(true)
 
   // Fetch transaction statistics from API
   const fetchStats = async () => {
@@ -68,8 +67,6 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error)
-    } finally {
-      setLoading(false)
     }
   }
 

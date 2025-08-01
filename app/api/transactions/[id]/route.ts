@@ -9,7 +9,7 @@ import { testConnection } from '@/actions/db'
 // GET /api/transactions/[id] - Get transaction by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Test database connection first
@@ -21,7 +21,8 @@ export async function GET(
       )
     }
 
-    const id = parseInt(params.id)
+    const resolvedParams = await params
+    const id = parseInt(resolvedParams.id)
     if (isNaN(id)) {
       return NextResponse.json(
         { error: 'Invalid transaction ID' },
@@ -49,7 +50,7 @@ export async function GET(
 // PUT /api/transactions/[id] - Update transaction
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Test database connection first
@@ -61,7 +62,8 @@ export async function PUT(
       )
     }
 
-    const id = parseInt(params.id)
+    const resolvedParams = await params
+    const id = parseInt(resolvedParams.id)
     if (isNaN(id)) {
       return NextResponse.json(
         { error: 'Invalid transaction ID' },
@@ -100,7 +102,7 @@ export async function PUT(
 // DELETE /api/transactions/[id] - Delete transaction
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Test database connection first
@@ -112,7 +114,8 @@ export async function DELETE(
       )
     }
 
-    const id = parseInt(params.id)
+    const resolvedParams = await params
+    const id = parseInt(resolvedParams.id)
     if (isNaN(id)) {
       return NextResponse.json(
         { error: 'Invalid transaction ID' },
