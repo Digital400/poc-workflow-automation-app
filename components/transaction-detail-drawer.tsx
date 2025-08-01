@@ -98,27 +98,28 @@ export function TransactionDetailDrawer({
   const [jsonModified, setJsonModified] = useState<boolean>(false)
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [accountDetailsMappings, setAccountDetailsMappings] = useState<ERPMapping[]>([
-    { field: "Account Number", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
-    { field: "Customer ID", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
-    { field: "Customer Email", sourceField: "customerName", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string", validation: { type: "email" } },
-    { field: "isPickup", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
-    { field: "Pickup Address", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
-    { field: "Shipping Address", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
-    { field: "Invoice Address", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" }
+    { field: "Account Number", sourceField: "accountNumber", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "Customer ID", sourceField: "customerId", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "Customer Email", sourceField: "emailAddress", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string", validation: { type: "email" } },
+    { field: "isPickup", sourceField: "isPickup", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "isDelivery", sourceField: "isDelivery", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "Pickup Address", sourceField: "__concatenated_pickup_address__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
+    { field: "Shipping Address", sourceField: "__concatenated_shipping_address__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
+    { field: "Invoice Address", sourceField: "__concatenated_invoice_address__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" }
   ])
   
   const [mainFieldsMappings, setMainFieldsMappings] = useState<ERPMapping[]>([
     { field: "Reference ID", sourceField: "id", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
     { field: "PO Number", sourceField: "purchaseOrderReference", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
-    { field: "Freight Charges", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "number" },
-    { field: "GST", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "number" },
+    { field: "Freight Charges", sourceField: "freightCharge", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "number" },
+    { field: "GST", sourceField: "gst", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "number" },
     { field: "Order Total", sourceField: "orderTotal", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "number" }
   ])
   const [lineItemMappings, setLineItemMappings] = useState<ERPLineItemMapping[]>([
     { field: "style", sourceField: "style", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
     { field: "sku", sourceField: "sku", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
-    { field: "varient", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
-    { field: "size", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
+    { field: "variant", sourceField: "variant", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
+    { field: "size", sourceField: "size", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
     { field: "quantity", sourceField: "quantity", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "number" },
     { field: "unitPrice", sourceField: "unitPrice", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "number" }
   ])
