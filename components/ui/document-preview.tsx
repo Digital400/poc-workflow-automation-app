@@ -54,8 +54,8 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
   }, [pdfUrl])
 
   return (
-    <div className={`p-4 space-y-4 bg-card border rounded-lg ${className}`}>
-              <div className="flex items-center justify-between mb-4">
+    <div className={`space-y-2 bg-card rounded-lg h-full flex flex-col ${className}`}>
+              <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             <span className="font-medium">Document Preview</span>
@@ -101,9 +101,9 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
         </div>
       </div>
       
-      <div className="border rounded-lg overflow-hidden bg-muted">
+      <div className="border rounded-lg overflow-hidden bg-muted flex-1 min-h-0">
         {pdfUrl && pdfUrl.trim() !== "" ? (
-          <div className="relative overflow-auto" style={{ height: '500px' }}>
+          <div className="relative overflow-auto h-full">
             {isLoading && (
               <div className="absolute inset-0 flex items-center justify-center bg-muted">
                 <div className="text-center">
@@ -125,7 +125,6 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
               src={`${getPdfUrl(pdfUrl)}#toolbar=0&navpanes=0&scrollbar=0&view=FitH&zoom=${Math.round(zoomLevel * 100)}`}
               className="w-full h-full border-0"
               style={{
-                minHeight: `${500 * zoomLevel}px`,
                 minWidth: `${100 * zoomLevel}%`
               }}
               title="PDF Document"

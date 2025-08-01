@@ -92,17 +92,27 @@ export function TransactionDetailDrawer({
 }: TransactionDetailDrawerProps) {
   const [editData, setEditData] = useState<Partial<Transaction>>({})
   const [pdfUrl, setPdfUrl] = useState<string>("")
-  const [viewMode, setViewMode] = useState<"default" | "json">("default")
+  const [viewMode, setViewMode] = useState<"pdf" | "json">("pdf")
   const [jsonData, setJsonData] = useState<string>("")
   const [jsonError, setJsonError] = useState<string>("")
   const [jsonModified, setJsonModified] = useState<boolean>(false)
   const [isSaving, setIsSaving] = useState<boolean>(false)
-  const [erpMappings, setErpMappings] = useState<ERPMapping[]>([
+  const [accountDetailsMappings, setAccountDetailsMappings] = useState<ERPMapping[]>([
+    { field: "Account Number", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "Customer ID", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "Customer Email", sourceField: "customerName", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string", validation: { type: "email" } },
+    { field: "isPickup", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "Pickup Address", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
+    { field: "Shipping Address", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "string" },
+    { field: "Invoice Address", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" }
+  ])
+  
+  const [mainFieldsMappings, setMainFieldsMappings] = useState<ERPMapping[]>([
     { field: "Reference ID", sourceField: "id", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
-    { field: "purchaseOrderNumber", sourceField: "purchaseOrderReference", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
-    { field: "customerEmail", sourceField: "customerName", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string", validation: { type: "email" } },
-    { field: "Order Total", sourceField: "orderTotal", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "number" },
-    { field: "CreateDate", sourceField: "createdOn", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "date" }
+    { field: "PO Number", sourceField: "purchaseOrderReference", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
+    { field: "Freight Charges", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "number" },
+    { field: "GST", sourceField: "__empty__", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: false, type: "number" },
+    { field: "Order Total", sourceField: "orderTotal", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "number" }
   ])
   const [lineItemMappings, setLineItemMappings] = useState<ERPLineItemMapping[]>([
     { field: "style", sourceField: "style", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "string" },
@@ -113,7 +123,7 @@ export function TransactionDetailDrawer({
     { field: "unitPrice", sourceField: "unitPrice", sanitize: false, sanitizeOptions: [], userDefinedValue: "", required: true, type: "number" }
   ])
   const [isSendingToERP, setIsSendingToERP] = useState<boolean>(false)
-  const [erpWizardStep, setErpWizardStep] = useState<"main" | "lineItems">("main")
+  const [erpWizardStep, setErpWizardStep] = useState<"accountDetails" | "mainFields" | "lineItems">("accountDetails")
   const [validationErrors, setValidationErrors] = useState<string[]>([])
 
   // Helper function to validate email
@@ -172,7 +182,9 @@ export function TransactionDetailDrawer({
   const validateMappings = () => {
     const errors: string[] = []
     
-    erpMappings.forEach(mapping => {
+    const allMappings = [...accountDetailsMappings, ...mainFieldsMappings]
+    
+    allMappings.forEach((mapping: ERPMapping) => {
       if (mapping.validation?.type === "email") {
         // Check user defined value first
         if (mapping.userDefinedValue && mapping.userDefinedValue.trim() !== "") {
@@ -180,8 +192,19 @@ export function TransactionDetailDrawer({
             errors.push(`${mapping.field}: Invalid email format in user defined value`)
           }
         } else if (mapping.sourceField && mapping.sourceField !== "__empty__") {
-          // Check source field value
-          const sourceValue = transaction?.[mapping.sourceField as keyof Transaction]
+          // Check source field value - handle nested paths
+          let sourceValue: unknown = transaction
+          const fieldPath = mapping.sourceField.split('.')
+          
+          for (const path of fieldPath) {
+            if (sourceValue && typeof sourceValue === 'object' && sourceValue !== null) {
+              sourceValue = (sourceValue as Record<string, unknown>)[path]
+            } else {
+              sourceValue = undefined
+              break
+            }
+          }
+          
           if (sourceValue) {
             // Convert to string for validation
             const stringValue = String(sourceValue).trim()
@@ -211,27 +234,116 @@ export function TransactionDetailDrawer({
   useEffect(() => {
     const errors = validateMappings()
     setValidationErrors(errors)
-  }, [erpMappings, transaction])
+  }, [accountDetailsMappings, mainFieldsMappings, transaction])
 
   // Helper function to get available source fields from transaction
   const getAvailableSourceFields = () => {
     if (!transaction) return []
     
     const fields: string[] = []
-    Object.keys(transaction).forEach(key => {
-      if (key !== "orderLines") {
-        fields.push(key)
-      }
-    })
     
-    // Add nested fields from orderLines
-    if (transaction.orderLines && transaction.orderLines.length > 0) {
-      Object.keys(transaction.orderLines[0]).forEach(key => {
-        fields.push(`orderLines.${key}`)
-      })
+    // Recursive function to extract all nested fields
+    const extractFields = (obj: unknown, prefix: string = "") => {
+      if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+        const objKeys = Object.keys(obj as Record<string, unknown>)
+        objKeys.forEach(key => {
+          const currentPath = prefix ? `${prefix}.${key}` : key
+          const value = (obj as Record<string, unknown>)[key]
+          
+          if (key === "orderLines") {
+            // Handle orderLines array specially
+            if (Array.isArray(value) && value.length > 0) {
+              const firstItem = value[0] as Record<string, unknown>
+              Object.keys(firstItem).forEach(lineKey => {
+                fields.push(`${currentPath}.${lineKey}`)
+              })
+            }
+          } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+            // Recursively extract nested object fields
+            extractFields(value, currentPath)
+          } else {
+            // Add simple fields
+            fields.push(currentPath)
+          }
+        })
+      }
     }
     
+    extractFields(transaction)
     return fields
+  }
+
+  // Helper function to get available source fields with concatenated address options
+  const getAvailableSourceFieldsWithAddress = (isAddressField: boolean = false) => {
+    const baseFields = getAvailableSourceFields()
+    
+    if (!isAddressField) {
+      return baseFields
+    }
+    
+    // Add concatenated address options for address fields
+    const addressOptions = [
+      "__concatenated_address__",
+      "__concatenated_pickup_address__", 
+      "__concatenated_shipping_address__",
+      "__concatenated_invoice_address__"
+    ]
+    
+    return [...baseFields, ...addressOptions]
+  }
+
+  // Helper function to handle concatenated address fields
+  const handleConcatenatedAddress = (addressType: string, transaction: Transaction): string => {
+    const addressParts: string[] = []
+    
+    switch (addressType) {
+      case "__concatenated_address__":
+        // Generic address concatenation - use shipping address as default
+        if (transaction.shippingAddress) {
+          const addr = transaction.shippingAddress
+          if (addr.streetAddress) addressParts.push(addr.streetAddress)
+          if (addr.city) addressParts.push(addr.city)
+          if (addr.suburb) addressParts.push(addr.suburb)
+          if (addr.postCode) addressParts.push(addr.postCode)
+          if (addr.country) addressParts.push(addr.country)
+        }
+        break
+      case "__concatenated_pickup_address__":
+        // Pickup address concatenation
+        if (transaction.orderPickupDetails) {
+          const pickup = transaction.orderPickupDetails
+          if (pickup.pickupAddress) addressParts.push(pickup.pickupAddress)
+          if (pickup.pickupCity) addressParts.push(pickup.pickupCity)
+          if (pickup.pickupSuburb) addressParts.push(pickup.pickupSuburb)
+          if (pickup.pickupPostCode) addressParts.push(pickup.pickupPostCode)
+        }
+        break
+      case "__concatenated_shipping_address__":
+        // Shipping address concatenation
+        if (transaction.shippingAddress) {
+          const addr = transaction.shippingAddress
+          if (addr.streetAddress) addressParts.push(addr.streetAddress)
+          if (addr.city) addressParts.push(addr.city)
+          if (addr.suburb) addressParts.push(addr.suburb)
+          if (addr.postCode) addressParts.push(addr.postCode)
+          if (addr.country) addressParts.push(addr.country)
+        }
+        break
+      case "__concatenated_invoice_address__":
+        // Invoice address concatenation
+        if (transaction.invoiceAddress) {
+          const addr = transaction.invoiceAddress
+          if (addr.streetAddress) addressParts.push(addr.streetAddress)
+          if (addr.city) addressParts.push(addr.city)
+          if (addr.suburb) addressParts.push(addr.suburb)
+          if (addr.postCode) addressParts.push(addr.postCode)
+          if (addr.country) addressParts.push(addr.country)
+        }
+        break
+    }
+    
+    // Join address parts with commas and clean up
+    return addressParts.filter(part => part && part.trim()).join(", ")
   }
 
   // Function to send data to ERP
@@ -251,10 +363,52 @@ export function TransactionDetailDrawer({
       // Transform data according to mappings
       const transformedData: Record<string, unknown> = {}
       
-      // Map main fields
-      erpMappings.forEach(mapping => {
+      // Map account details fields
+      accountDetailsMappings.forEach((mapping: ERPMapping) => {
         if (mapping.sourceField && mapping.sourceField !== "__empty__") {
-          let value = transaction[mapping.sourceField as keyof Transaction]
+          let value: unknown
+          
+          // Handle concatenated address fields
+          if (mapping.sourceField.startsWith("__concatenated_")) {
+            value = handleConcatenatedAddress(mapping.sourceField, transaction)
+          } else {
+            // Handle nested field paths
+            value = transaction
+            const fieldPath = mapping.sourceField.split('.')
+            
+            for (const path of fieldPath) {
+              if (value && typeof value === 'object' && value !== null) {
+                value = (value as Record<string, unknown>)[path]
+              } else {
+                value = undefined
+                break
+              }
+            }
+          }
+          
+          if (mapping.sanitize) {
+            value = sanitizeData(value, mapping.sanitizeOptions, mapping.userDefinedValue) as typeof value
+          }
+          
+          transformedData[mapping.field] = value
+        }
+      })
+      
+      // Map main fields
+      mainFieldsMappings.forEach((mapping: ERPMapping) => {
+        if (mapping.sourceField && mapping.sourceField !== "__empty__") {
+          // Handle nested field paths
+          let value: unknown = transaction
+          const fieldPath = mapping.sourceField.split('.')
+          
+          for (const path of fieldPath) {
+            if (value && typeof value === 'object' && value !== null) {
+              value = (value as Record<string, unknown>)[path]
+            } else {
+              value = undefined
+              break
+            }
+          }
           
           if (mapping.sanitize) {
             value = sanitizeData(value, mapping.sanitizeOptions, mapping.userDefinedValue) as typeof value
@@ -316,6 +470,13 @@ export function TransactionDetailDrawer({
       setJsonData(JSON.stringify(transaction, null, 2))
       setJsonError("")
       setJsonModified(false)
+      
+      // Start with PDF view if PDF URL is available, otherwise JSON view
+      if (transaction.blobPath) {
+        setViewMode("pdf")
+      } else {
+        setViewMode("json")
+      }
     }
   }, [transaction])
 
@@ -423,9 +584,9 @@ export function TransactionDetailDrawer({
 
   return (
     <Drawer open={isOpen} onOpenChange={onOpenChange}>
-      <DrawerContent>
+      <DrawerContent className="max-h-[90vh] flex flex-col">
         <div 
-          className="mx-auto w-full max-w-full px-12 overflow-y-auto min-h-[78vh]"
+          className="mx-auto w-full max-w-full px-12 flex flex-col flex-1 min-h-0"
           style={{
             imageRendering: 'crisp-edges',
             textRendering: 'optimizeLegibility',
@@ -433,7 +594,7 @@ export function TransactionDetailDrawer({
             MozOsxFontSmoothing: 'grayscale'
           }}
         >
-          <DrawerHeader>
+          <DrawerHeader className="py-0">
             <div className="flex items-center justify-between">
               <div>
                 <DrawerTitle className="flex items-center gap-2">
@@ -452,23 +613,21 @@ export function TransactionDetailDrawer({
             </div>
           </DrawerHeader>
 
-          <div className="flex flex-row gap-4">
+          <div className="flex flex-row gap-4 flex-1 min-h-0">
           
-          <DocumentPreview pdfUrl={pdfUrl} className="w-1/4" />
-
-          <div className="mid-container p-4 space-y-4 w-1/4">
+          <div className="left-container p-2 w-1/2 flex flex-col flex-1 min-h-0">
             {/* View Mode Toggle */}
             <div className="flex items-center justify-between mb-4">
               <label className="text-sm font-medium text-muted-foreground">View Mode</label>
               <div className="flex border rounded-md overflow-hidden">
                 <Button
-                  variant={viewMode === "default" ? "default" : "ghost"}
+                  variant={viewMode === "pdf" ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setViewMode("default")}
+                  onClick={() => setViewMode("pdf")}
                   className="rounded-none border-0"
                 >
                   <FileText className="h-4 w-4 mr-1" />
-                  Default
+                  PDF
                 </Button>
                 <Button
                   variant={viewMode === "json" ? "default" : "ghost"}
@@ -482,79 +641,16 @@ export function TransactionDetailDrawer({
               </div>
             </div>
 
-            {viewMode === "default" ? (
-              // Default View
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Purchase Order</label>
-                    <p className="text-sm font-mono bg-muted p-2 rounded">{transaction.purchaseOrderReference || "N/A"}</p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Reference Key</label>
-                    <p className="text-sm font-mono bg-muted p-2 rounded">{transaction.referenceKey || "N/A"}</p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Reference Value</label>
-                    <p className="text-sm font-mono bg-muted p-2 rounded">{transaction.referenceValue || "N/A"}</p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Customer</label>
-                    <p className="text-sm">{transaction.customerName || "N/A"}</p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Order Total</label>
-                    <p className="text-sm font-medium">${transaction.orderTotal?.toFixed(2) || "0.00"}</p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Integration Service</label>
-                    <p className="text-sm">{transaction.integrationService}</p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Status</label>
-                    <div>{getStatusBadge(transaction.status)}</div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Created On</label>
-                    <p className="text-sm">{formatDate(transaction.createdOn)}</p>
-                  </div>
-                </div>
-                
-                {transaction.orderLines && transaction.orderLines.length > 0 && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Order Items</label>
-                    <div className="space-y-2 max-h-46 overflow-y-auto">
-                      {transaction.orderLines.map((item, index) => (
-                        <div key={index} className="text-sm bg-muted p-2 rounded">
-                          <div className="flex justify-between">
-                            <span>{item.style} - {item.sku}</span>
-                            <span className="font-medium">${item.unitPrice.toFixed(2)}</span>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Qty: {item.quantity} | Total: ${(item.quantity * item.unitPrice).toFixed(2)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Transaction ID</label>
-                  <p className="text-sm font-mono bg-muted p-2 rounded">{transaction.id}</p>
-                </div>
+            {viewMode === "pdf" ? (
+              // PDF View
+              <div className="flex-1 min-h-0">
+                <DocumentPreview pdfUrl={pdfUrl} className="w-full h-full" />
               </div>
+
             ) : (
               // JSON View
-              <div className="space-y-4">
-                <div className="space-y-2">
+              <div className="flex flex-col flex-1 min-h-0">
+                <div className="space-y-2 mb-4">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium text-muted-foreground">Transaction JSON</label>
                     {jsonModified && (
@@ -563,38 +659,39 @@ export function TransactionDetailDrawer({
                       </Badge>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground mb-2">
+                  <div className="text-xs text-muted-foreground">
                     {mode === "view" ? "Read-only view" : "Note: Transaction ID cannot be modified"}
                   </div>
-                  <div className="relative h-full">
-                    <textarea
-                      value={jsonData}
-                      onChange={(e) => handleJsonChange(e.target.value)}
-                      disabled={mode === "view" || isSaving}
-                      className={`w-full h-120 p-3 font-mono text-sm border rounded-md resize-none ${
-                        mode === "view" ? "bg-muted/50 cursor-not-allowed" : 
-                        isSaving ? "bg-muted/50 cursor-not-allowed" : "bg-muted"
-                      }`}
-                      placeholder={
-                        mode === "view" ? "Read-only JSON view" : 
-                        isSaving ? "Saving..." : "Enter JSON data..."
-                      }
-                    />
-                    {jsonError && (
-                      <div className="absolute bottom-2 right-2">
-                        <Badge variant="destructive" className="text-xs">
-                          {jsonError}
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
+                </div>
+                
+                <div className="relative flex-1 min-h-0">
+                  <textarea
+                    value={jsonData}
+                    onChange={(e) => handleJsonChange(e.target.value)}
+                    disabled={mode === "view" || isSaving}
+                    className={`w-full h-full p-3 font-mono text-sm border rounded-md resize-none ${
+                      mode === "view" ? "bg-muted/50 cursor-not-allowed" : 
+                      isSaving ? "bg-muted/50 cursor-not-allowed" : "bg-muted"
+                    }`}
+                    placeholder={
+                      mode === "view" ? "Read-only JSON view" : 
+                      isSaving ? "Saving..." : "Enter JSON data..."
+                    }
+                  />
+                  {jsonError && (
+                    <div className="absolute bottom-2 right-2">
+                      <Badge variant="destructive" className="text-xs">
+                        {jsonError}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
                 
                 {mode === "edit" && jsonModified && (
                   <Button 
                     onClick={handleJsonSave}
                     disabled={!!jsonError || isSaving}
-                    className="w-full"
+                    className="w-full mt-4"
                   >
                     {isSaving ? (
                       <>
@@ -610,30 +707,40 @@ export function TransactionDetailDrawer({
             )}
           </div>
 
-          <div className="right-container p-4 space-y-4 w-1/2 overflow-y-auto">
+          <div className="right-container p-2 w-1/2 flex flex-col min-h-0 overflow-y-auto">
             <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Settings className="h-5 w-5" />
                   Digital-Hub Integration
                 </CardTitle>
-                <CardDescription>
-                  Map transaction data to Digital-Hub system format
-                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Wizard Navigation */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-2">
                     <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
-                      erpWizardStep === "main" 
+                      erpWizardStep === "accountDetails" 
                         ? "bg-primary text-primary-foreground" 
                         : "bg-muted text-muted-foreground"
                     }`}>
                       1
                     </div>
                     <span className={`text-sm font-medium ${
-                      erpWizardStep === "main" ? "text-foreground" : "text-muted-foreground"
+                      erpWizardStep === "accountDetails" ? "text-foreground" : "text-muted-foreground"
+                    }`}>
+                      Account Details
+                    </span>
+                    <div className="w-8 h-px bg-muted"></div>
+                    <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
+                      erpWizardStep === "mainFields" 
+                        ? "bg-primary text-primary-foreground" 
+                        : "bg-muted text-muted-foreground"
+                    }`}>
+                      2
+                    </div>
+                    <span className={`text-sm font-medium ${
+                      erpWizardStep === "mainFields" ? "text-foreground" : "text-muted-foreground"
                     }`}>
                       Main Fields
                     </span>
@@ -643,7 +750,7 @@ export function TransactionDetailDrawer({
                         ? "bg-primary text-primary-foreground" 
                         : "bg-muted text-muted-foreground"
                     }`}>
-                      2
+                      3
                     </div>
                     <span className={`text-sm font-medium ${
                       erpWizardStep === "lineItems" ? "text-foreground" : "text-muted-foreground"
@@ -657,16 +764,34 @@ export function TransactionDetailDrawer({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setErpWizardStep("main")}
+                        onClick={() => setErpWizardStep("mainFields")}
                       >
                         ← Back
                       </Button>
                     )}
-                    {erpWizardStep === "main" && (
+                    {erpWizardStep === "mainFields" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setErpWizardStep("accountDetails")}
+                        >
+                          ← Back
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setErpWizardStep("lineItems")}
+                        >
+                          Next →
+                        </Button>
+                      </>
+                    )}
+                    {erpWizardStep === "accountDetails" && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setErpWizardStep("lineItems")}
+                        onClick={() => setErpWizardStep("mainFields")}
                       >
                         Next →
                       </Button>
@@ -674,18 +799,18 @@ export function TransactionDetailDrawer({
                   </div>
                 </div>
 
-                {/* Main Fields Mapping */}
-                {erpWizardStep === "main" && (
+                {/* Account Details Mapping */}
+                {erpWizardStep === "accountDetails" && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold">Main Fields</h4>
+                      <h4 className="text-sm font-semibold">Account Details</h4>
                       <Badge variant="secondary" className="text-xs">
-                        {erpMappings.filter(m => m.sourceField && m.sourceField !== "__empty__").length}/{erpMappings.length} Mapped
+                        {accountDetailsMappings.filter(m => m.sourceField && m.sourceField !== "__empty__").length}/{accountDetailsMappings.length} Mapped
                       </Badge>
                     </div>
                   
                   <div className="grid grid-cols-2 gap-3">
-                    {erpMappings.map((mapping, index) => {
+                    {accountDetailsMappings.map((mapping, index) => {
                       const hasEmailError = mapping.validation?.type === "email" && 
                         validationErrors.some(error => error.includes(mapping.field))
                       
@@ -702,9 +827,9 @@ export function TransactionDetailDrawer({
                             <Switch
                               checked={mapping.sanitize}
                               onCheckedChange={(checked) => {
-                                const newMappings = [...erpMappings]
+                                const newMappings = [...accountDetailsMappings]
                                 newMappings[index].sanitize = checked
-                                setErpMappings(newMappings)
+                                setAccountDetailsMappings(newMappings)
                               }}
                             />
                             <span className="text-xs text-muted-foreground">Sanitize</span>
@@ -717,9 +842,9 @@ export function TransactionDetailDrawer({
                             <Select
                               value={mapping.sourceField}
                               onValueChange={(value) => {
-                                const newMappings = [...erpMappings]
+                                const newMappings = [...accountDetailsMappings]
                                 newMappings[index].sourceField = value
-                                setErpMappings(newMappings)
+                                setAccountDetailsMappings(newMappings)
                               }}
                             >
                               <SelectTrigger className="h-8">
@@ -727,9 +852,17 @@ export function TransactionDetailDrawer({
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="__empty__">Leave Empty</SelectItem>
-                                {getAvailableSourceFields().map(field => (
+                                {getAvailableSourceFieldsWithAddress(
+                                  mapping.field === "Pickup Address" || 
+                                  mapping.field === "Shipping Address" || 
+                                  mapping.field === "Invoice Address"
+                                ).map(field => (
                                   <SelectItem key={field} value={field}>
-                                    {field}
+                                    {field === "__concatenated_address__" && "📝 Concatenated Address"}
+                                    {field === "__concatenated_pickup_address__" && "📝 Concatenated Pickup Address"}
+                                    {field === "__concatenated_shipping_address__" && "📝 Concatenated Shipping Address"}
+                                    {field === "__concatenated_invoice_address__" && "📝 Concatenated Invoice Address"}
+                                    {!field.startsWith("__concatenated_") && field}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -747,7 +880,7 @@ export function TransactionDetailDrawer({
                                       id={`${mapping.field}-${option}`}
                                       checked={mapping.sanitizeOptions.includes(option)}
                                       onChange={(e) => {
-                                        const newMappings = [...erpMappings]
+                                        const newMappings = [...accountDetailsMappings]
                                         if (e.target.checked) {
                                           // Prevent conflicting options
                                           if (option === "stringToNumber" && mapping.sanitizeOptions.includes("numberToString")) {
@@ -760,7 +893,7 @@ export function TransactionDetailDrawer({
                                         } else {
                                           newMappings[index].sanitizeOptions = newMappings[index].sanitizeOptions.filter(opt => opt !== option)
                                         }
-                                        setErpMappings(newMappings)
+                                        setAccountDetailsMappings(newMappings)
                                       }}
                                       className="rounded"
                                     />
@@ -786,7 +919,7 @@ export function TransactionDetailDrawer({
                               <Input
                                 value={mapping.userDefinedValue}
                                 onChange={(e) => {
-                                  const newMappings = [...erpMappings]
+                                  const newMappings = [...accountDetailsMappings]
                                   newMappings[index].userDefinedValue = e.target.value
                                   
                                   // If user enters a value, uncheck all sanitization options
@@ -794,7 +927,149 @@ export function TransactionDetailDrawer({
                                     newMappings[index].sanitizeOptions = []
                                   }
                                   
-                                  setErpMappings(newMappings)
+                                  setAccountDetailsMappings(newMappings)
+                                }}
+                                placeholder="Enter value to override sanitization"
+                                className={`h-8 ${mapping.userDefinedValue ? 'border-blue-500 bg-blue-50' : ''}`}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )})}
+                  </div>
+                </div>
+                )}
+                
+                {/* Main Fields Mapping */}
+                {erpWizardStep === "mainFields" && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold">Main Fields & Pricing</h4>
+                      <Badge variant="secondary" className="text-xs">
+                        {mainFieldsMappings.filter(m => m.sourceField && m.sourceField !== "__empty__").length}/{mainFieldsMappings.length} Mapped
+                      </Badge>
+                    </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    {mainFieldsMappings.map((mapping, index) => {
+                      const hasEmailError = mapping.validation?.type === "email" && 
+                        validationErrors.some(error => error.includes(mapping.field))
+                      
+                      return (
+                        <div key={mapping.field} className={`p-3 border rounded-lg bg-muted/30 ${
+                          hasEmailError ? 'border-red-500 bg-red-50' : ''
+                        }`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <Label className="text-sm font-medium">
+                            {mapping.field}
+                            {mapping.required && <span className="text-red-500 ml-1">*</span>}
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={mapping.sanitize}
+                              onCheckedChange={(checked) => {
+                                const newMappings = [...mainFieldsMappings]
+                                newMappings[index].sanitize = checked
+                                setMainFieldsMappings(newMappings)
+                              }}
+                            />
+                            <span className="text-xs text-muted-foreground">Sanitize</span>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Source Field</Label>
+                            <Select
+                              value={mapping.sourceField}
+                              onValueChange={(value) => {
+                                const newMappings = [...mainFieldsMappings]
+                                newMappings[index].sourceField = value
+                                setMainFieldsMappings(newMappings)
+                              }}
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="Select field" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__empty__">Leave Empty</SelectItem>
+                                {getAvailableSourceFieldsWithAddress(
+                                  mapping.field === "Pickup Address" || 
+                                  mapping.field === "Shipping Address" || 
+                                  mapping.field === "Invoice Address"
+                                ).map(field => (
+                                  <SelectItem key={field} value={field}>
+                                    {field === "__concatenated_address__" && "📝 Concatenated Address"}
+                                    {field === "__concatenated_pickup_address__" && "📝 Concatenated Pickup Address"}
+                                    {field === "__concatenated_shipping_address__" && "📝 Concatenated Shipping Address"}
+                                    {field === "__concatenated_invoice_address__" && "📝 Concatenated Invoice Address"}
+                                    {!field.startsWith("__concatenated_") && field}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          {mapping.sanitize && (
+                            <div className="space-y-2">
+                              <Label className="text-xs text-muted-foreground">Sanitize Options</Label>
+                              <div className="grid grid-cols-2 gap-1">
+                                {["trim", "stringToNumber", "numberToString", "toUpperCase", "toLowerCase"].map(option => (
+                                  <div key={option} className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      id={`main-${mapping.field}-${option}`}
+                                      checked={mapping.sanitizeOptions.includes(option)}
+                                      onChange={(e) => {
+                                        const newMappings = [...mainFieldsMappings]
+                                        if (e.target.checked) {
+                                          // Prevent conflicting options
+                                          if (option === "stringToNumber" && mapping.sanitizeOptions.includes("numberToString")) {
+                                            newMappings[index].sanitizeOptions = newMappings[index].sanitizeOptions.filter(opt => opt !== "numberToString")
+                                          }
+                                          if (option === "numberToString" && mapping.sanitizeOptions.includes("stringToNumber")) {
+                                            newMappings[index].sanitizeOptions = newMappings[index].sanitizeOptions.filter(opt => opt !== "stringToNumber")
+                                          }
+                                          newMappings[index].sanitizeOptions.push(option)
+                                        } else {
+                                          newMappings[index].sanitizeOptions = newMappings[index].sanitizeOptions.filter(opt => opt !== option)
+                                        }
+                                        setMainFieldsMappings(newMappings)
+                                      }}
+                                      className="rounded"
+                                    />
+                                    <Label htmlFor={`main-${mapping.field}-${option}`} className="text-xs">
+                                      {option === "trim" && "Trim"}
+                                      {option === "stringToNumber" && "To Number"}
+                                      {option === "numberToString" && "To String"}
+                                      {option === "toUpperCase" && "Uppercase"}
+                                      {option === "toLowerCase" && "Lowercase"}
+                                    </Label>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {mapping.sanitize && (
+                            <div>
+                              <Label className="text-xs text-muted-foreground">
+                                User Defined Value
+                                <span className="text-blue-600 ml-1">(Overrides sanitization)</span>
+                              </Label>
+                              <Input
+                                value={mapping.userDefinedValue}
+                                onChange={(e) => {
+                                  const newMappings = [...mainFieldsMappings]
+                                  newMappings[index].userDefinedValue = e.target.value
+                                  
+                                  // If user enters a value, uncheck all sanitization options
+                                  if (e.target.value.trim() !== "") {
+                                    newMappings[index].sanitizeOptions = []
+                                  }
+                                  
+                                  setMainFieldsMappings(newMappings)
                                 }}
                                 placeholder="Enter value to override sanitization"
                                 className={`h-8 ${mapping.userDefinedValue ? 'border-blue-500 bg-blue-50' : ''}`}

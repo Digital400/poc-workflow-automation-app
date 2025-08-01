@@ -44,7 +44,29 @@ export function mapDBTransactionToFrontend(dbTransaction: DBTransaction) {
         : jsonData.emailAddress,
       orderTotal: jsonData.totalPriceWithGst || 0,
       orderLines: jsonData.orderLines || [],
-      blobPath: dbTransaction.blob_path
+      blobPath: dbTransaction.blob_path,
+      
+      // Include all additional fields from the JSON
+      emailAddress: jsonData.emailAddress,
+      accountNumber: jsonData.accountNumber,
+      deliverySequence: jsonData.deliverySequence,
+      customerId: jsonData.customerId,
+      orderId: jsonData.orderId,
+      isPickup: jsonData.isPickup,
+      isDelivery: jsonData.isDelivery,
+      orderPickupDetails: jsonData.orderPickupDetails,
+      orderNote: jsonData.orderNote,
+      deliveryInstructions: jsonData.deliveryInstructions,
+      date: jsonData.date,
+      paymentType: jsonData.paymentType,
+      shippingAddress: jsonData.shippingAddress,
+      invoiceAddress: jsonData.invoiceAddress,
+      cardDetails: jsonData.cardDetails,
+      freightCharge: jsonData.freightCharge,
+      freightChargeWithGst: jsonData.freightChargeWithGst,
+      gst: jsonData.gst,
+      subTotal: jsonData.subTotal,
+      totalPriceWithGst: jsonData.totalPriceWithGst
     }
   } catch (error) {
     console.error('Error parsing JSON for transaction:', error)
