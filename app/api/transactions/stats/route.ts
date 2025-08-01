@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getTransactionStats } from '@/actions/transactions'
 import { testConnection } from '@/actions/db'
 
 // GET /api/transactions/stats - Get transaction statistics
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Test database connection first
     const isConnected = await testConnection()

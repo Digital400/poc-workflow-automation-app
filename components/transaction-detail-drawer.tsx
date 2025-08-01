@@ -10,7 +10,6 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
-  DrawerTrigger,
 } from "@/components/ui/drawer"
 import { Badge } from "@/components/ui/badge"
 import { DocumentPreview } from "@/components/ui/document-preview"
@@ -101,7 +100,7 @@ export function TransactionDetailDrawer({
         onOpenChange(false)
       }
       setJsonError("")
-    } catch (error) {
+    } catch {
       setJsonError("Invalid JSON format")
     }
   }
@@ -127,7 +126,7 @@ export function TransactionDetailDrawer({
         integrationService: parsedData.integrationService || transaction?.integrationService,
         status: parsedData.status || transaction?.status
       })
-    } catch (error) {
+    } catch {
       setJsonError("Invalid JSON format")
     }
   }

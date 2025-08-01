@@ -1,15 +1,18 @@
-const sql = require('mssql')
+import sql from 'mssql'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 const dbConfig = {
-  server: 'rla-test.database.windows.net',
-  database: 'rla-test-dev-db',
-  user: 'rlaAdmin',
-  password: 'rla@test123',
+  server: process.env.DB_SERVER || '',
+  database: process.env.DB_DATABASE || '',
+  user: process.env.DB_USER || '',
+  password: process.env.DB_PASSWORD || '',
   options: {
-    encrypt: true,
-    trustServerCertificate: false,
-    connectionTimeout: 30000,
-    requestTimeout: 30000,
+    encrypt: process.env.DB_ENCRYPT === 'true',
+    trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
+    connectionTimeout: parseInt(process.env.DB_CONNECTION_TIMEOUT || '30000'),
+    requestTimeout: parseInt(process.env.DB_REQUEST_TIMEOUT || '30000'),
   },
 }
 

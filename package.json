@@ -2,6 +2,7 @@
   "name": "poc-workflow-automation-app",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
@@ -19,6 +20,7 @@
     "@types/mssql": "^9.1.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.1",
     "lucide-react": "^0.534.0",
     "mssql": "^11.0.1",
     "next": "15.4.5",

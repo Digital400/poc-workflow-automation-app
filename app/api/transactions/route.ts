@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { 
   getTransactions, 
-  createTransaction, 
-  getTransactionStats 
+  createTransaction
 } from '@/actions/transactions'
 import { testConnection } from '@/actions/db'
 

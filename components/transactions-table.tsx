@@ -72,10 +72,9 @@ interface TransactionsTableProps {
   data: Transaction[]
   onViewTransaction: (transaction: Transaction) => void
   onEditTransaction: (transaction: Transaction) => void
-  loading?: boolean
 }
 
-export function TransactionsTable({ data, onViewTransaction, onEditTransaction, loading = false }: TransactionsTableProps) {
+export function TransactionsTable({ data, onViewTransaction, onEditTransaction }: TransactionsTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -157,7 +156,11 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction, 
               variant="ghost"
               size="sm"
               className="h-8 w-8 p-0"
-              onClick={() => onViewTransaction(transaction)}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onViewTransaction(transaction)
+              }}
             >
               <Eye className="h-4 w-4" />
               <span className="sr-only">View</span>

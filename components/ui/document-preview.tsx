@@ -21,7 +21,7 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
   }
 
   const handleDownload = () => {
-    if (pdfUrl) {
+    if (pdfUrl && pdfUrl.trim() !== "") {
       window.open(pdfUrl, '_blank')
     }
   }
@@ -53,18 +53,24 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
           >
             <ZoomIn className="h-3 w-3" />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownload}
-          >
-            <Download className="h-3 w-3" />
-          </Button>
+          {pdfUrl && pdfUrl.trim() !== "" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                handleDownload()
+              }}
+            >
+              <Download className="h-3 w-3" />
+            </Button>
+          )}
         </div>
       </div>
       
       <div className="border rounded-lg overflow-hidden bg-gray-50">
-        {pdfUrl ? (
+        {pdfUrl && pdfUrl.trim() !== "" ? (
           <div className="relative overflow-auto" style={{ height: '500px' }}>
             <iframe
               src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH&zoom=${Math.round(zoomLevel * 100)}`}
@@ -74,6 +80,10 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
                 minWidth: `${100 * zoomLevel}%`
               }}
               title="PDF Document"
+              onLoad={(e) => {
+                // Prevent any automatic downloads
+                e.preventDefault()
+              }}
             />
           </div>
         ) : (

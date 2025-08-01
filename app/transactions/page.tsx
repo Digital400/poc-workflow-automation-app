@@ -1,12 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { TransactionsTable } from "@/components/transactions-table"
 import { TransactionDetailDrawer } from "@/components/transaction-detail-drawer"
 import { Transaction } from "@/lib/statics/transactionData"
 import { useTransactions } from "@/hooks/use-transactions"
-import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle, RefreshCw } from "lucide-react"
 
@@ -16,17 +15,13 @@ export default function TransactionsPage() {
     loading,
     error,
     stats,
-    totalPages,
     currentPage,
     pageSize,
     searchTerm,
     fetchTransactions,
-    createTransaction,
     updateTransaction,
     deleteTransaction,
     fetchStats,
-    setSearchTerm,
-    setPageSize,
   } = useTransactions()
 
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
@@ -53,12 +48,7 @@ export default function TransactionsPage() {
       if (!currentTransaction) return
       
       // This is a simplified update - in practice you'd want to preserve all existing JSON data
-      const dbData = {
-        JSON: JSON.stringify({ 
-          status: updatedTransaction.status,
-          // You would typically merge with existing JSON data here
-        })
-      }
+      // You would typically merge with existing JSON data here
       
       await updateTransaction(updatedTransaction.id, { status: updatedTransaction.status })
       setIsDrawerOpen(false)
@@ -84,6 +74,10 @@ export default function TransactionsPage() {
     fetchTransactions(currentPage, pageSize, searchTerm)
     fetchStats()
   }
+
+  useEffect(() => {
+    console.log(transactions)
+  }, [transactions])
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -145,7 +139,6 @@ export default function TransactionsPage() {
         data={transactions}
         onViewTransaction={handleViewTransaction}
         onEditTransaction={handleEditTransaction}
-        loading={loading}
       />
 
       <TransactionDetailDrawer

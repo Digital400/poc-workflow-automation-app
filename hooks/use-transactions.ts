@@ -55,6 +55,7 @@ export function useTransactions(): UseTransactionsReturn {
       }
       
       const data = await response.json()
+      console.log(data)
       setTransactions(data.transactions)
       setTotalPages(Math.ceil(data.total / size))
       setCurrentPage(page)
