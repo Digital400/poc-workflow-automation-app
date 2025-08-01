@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/drawer"
 import { Badge } from "@/components/ui/badge"
 import { DocumentPreview } from "@/components/ui/document-preview"
-import { Transaction } from "@/lib/statics/transactionData"
+import { Transaction } from "@/lib/types"
 import { Eye, Edit, Code, FileText } from "lucide-react"
 
 interface TransactionDetailDrawerProps {
@@ -151,7 +151,7 @@ export function TransactionDetailDrawer({
               {mode === "view" ? "View Transaction" : "Edit Transaction"}
             </DrawerTitle>
             <DrawerDescription>
-              Transaction details for {transaction.referenceId}
+              Transaction details for {transaction.purchaseOrderReference || transaction.referenceValue}
             </DrawerDescription>
           </DrawerHeader>
 
@@ -191,7 +191,17 @@ export function TransactionDetailDrawer({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-muted-foreground">Purchase Order</label>
-                    <p className="text-sm font-mono bg-muted p-2 rounded">{transaction.referenceId}</p>
+                    <p className="text-sm font-mono bg-muted p-2 rounded">{transaction.purchaseOrderReference || "N/A"}</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">Reference Key</label>
+                    <p className="text-sm font-mono bg-muted p-2 rounded">{transaction.referenceKey || "N/A"}</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">Reference Value</label>
+                    <p className="text-sm font-mono bg-muted p-2 rounded">{transaction.referenceValue || "N/A"}</p>
                   </div>
                   
                   <div className="space-y-2">

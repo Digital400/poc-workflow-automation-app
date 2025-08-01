@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { mutableTransactionData, Transaction } from "@/lib/statics/transactionData"
+import { Transaction } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Eye, TrendingUp, AlertCircle, CheckCircle, Clock } from "lucide-react"
 import { useState, useEffect } from "react"
@@ -40,42 +40,45 @@ export default function DashboardPage() {
     successRate: 0,
     recentTransactions: [] as Transaction[]
   })
+  const [loading, setLoading] = useState(true)
 
-  // Calculate transaction statistics
-  const calculateStats = () => {
-    const totalTransactions = mutableTransactionData.length
-    const completedTransactions = mutableTransactionData.filter(t => t.status === "completed").length
-    const processingTransactions = mutableTransactionData.filter(t => t.status === "processing").length
-    const pendingTransactions = mutableTransactionData.filter(t => t.status === "pending").length
-    const failedTransactions = mutableTransactionData.filter(t => t.status === "failed").length
-    
-    const successRate = totalTransactions > 0 ? Math.round((completedTransactions / totalTransactions) * 100) : 0
-    
-    // Get recent transactions (last 5)
-    const recentTransactions = mutableTransactionData
-      .sort((a, b) => new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime())
-      .slice(0, 5)
+  // Fetch transaction statistics from API
+  const fetchStats = async () => {
+    try {
+      const [statsResponse, transactionsResponse] = await Promise.all([
+        fetch('/api/transactions/stats'),
+        fetch('/api/transactions?page=1&pageSize=5')
+      ])
 
-    setTransactionStats({
-      totalTransactions,
-      completedTransactions,
-      processingTransactions,
-      pendingTransactions,
-      failedTransactions,
-      successRate,
-      recentTransactions
-    })
+      if (statsResponse.ok && transactionsResponse.ok) {
+        const stats = await statsResponse.json()
+        const transactionsData = await transactionsResponse.json()
+        
+        const successRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0
+        
+        setTransactionStats({
+          totalTransactions: stats.total,
+          completedTransactions: stats.completed,
+          processingTransactions: stats.processing,
+          pendingTransactions: stats.pending,
+          failedTransactions: stats.failed,
+          successRate,
+          recentTransactions: transactionsData.transactions
+        })
+      }
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // Calculate stats on component mount and when data changes
+  // Fetch data on component mount
   useEffect(() => {
-    calculateStats()
+    fetchStats()
     
-    // Set up an interval to check for changes in mutableTransactionData
-    const interval = setInterval(() => {
-      calculateStats()
-    }, 1000) // Check every second
-
+    // Refresh data every 30 seconds
+    const interval = setInterval(fetchStats, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -138,7 +141,7 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">{transaction.integrationService}</span>
-                    <span className="text-xs text-muted-foreground">{transaction.referenceId}</span>
+                    <span className="text-xs text-muted-foreground">{transaction.purchaseOrderReference || transaction.referenceValue}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

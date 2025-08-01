@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Transaction } from '@/lib/statics/transactionData'
+import { Transaction } from '@/lib/types'
 
 interface TransactionStats {
   total: number

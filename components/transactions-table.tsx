@@ -41,7 +41,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import { Transaction } from "@/lib/statics/transactionData"
+import { Transaction } from "@/lib/types"
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -96,7 +96,7 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
       cell: ({ row }) => <div className="font-medium">{row.getValue("integrationService")}</div>,
     },
     {
-      accessorKey: "referenceId",
+      accessorKey: "purchaseOrderReference",
       header: ({ column }) => {
         return (
           <Button
@@ -108,7 +108,7 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
           </Button>
         )
       },
-      cell: ({ row }) => <div className="font-mono text-sm">{row.getValue("referenceId")}</div>,
+      cell: ({ row }) => <div className="font-mono text-sm">{row.getValue("purchaseOrderReference") || "N/A"}</div>,
     },
     {
       accessorKey: "customerName",
@@ -316,9 +316,9 @@ export function TransactionsTable({ data, onViewTransaction, onEditTransaction }
       <div className="flex items-center py-4">
         <Input
           placeholder="Filter by purchase order, customer, or integration..."
-          value={(table.getColumn("referenceId")?.getFilterValue() as string) ?? ""}
+          value={(table.getColumn("purchaseOrderReference")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
-            table.getColumn("referenceId")?.setFilterValue(event.target.value)
+            table.getColumn("purchaseOrderReference")?.setFilterValue(event.target.value)
           }
           className="max-w-sm"
         />

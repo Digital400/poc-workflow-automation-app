@@ -1,6 +1,6 @@
 import sql from 'mssql'
 import { getConnection } from './db'
-import { Transaction } from '@/lib/statics/transactionData'
+import { Transaction } from '@/lib/types'
 
 // Database Transaction type matching the SQL Server table structure
 export interface DBTransaction {
@@ -30,13 +30,12 @@ export function mapDBTransactionToFrontend(dbTransaction: DBTransaction) {
       status = "failed"
     }
     
-    // Use purchase order reference as reference ID
-    const referenceId = jsonData.purchaseOrderReference || dbTransaction.reference_key
-    
     return {
       id: dbTransaction.TransactionId.toString(),
       integrationService: dbTransaction.Integration,
-      referenceId: referenceId,
+      referenceKey: dbTransaction.reference_key,
+      referenceValue: dbTransaction.reference_value,
+      purchaseOrderReference: jsonData.purchaseOrderReference,
       status: status,
       createdOn: dbTransaction.created_on.toISOString(),
       // Add additional data for display
@@ -50,15 +49,17 @@ export function mapDBTransactionToFrontend(dbTransaction: DBTransaction) {
   } catch (error) {
     console.error('Error parsing JSON for transaction:', error)
     return {
-      id: dbTransaction.TransactionId.toString(),
-      integrationService: dbTransaction.Integration,
-      referenceId: dbTransaction.reference_key,
+      id: '',
+      integrationService: '',
+      referenceKey: '',
+      referenceValue: '',
+      purchaseOrderReference: '',
       status: "pending" as const,
-      createdOn: dbTransaction.created_on.toISOString(),
+      createdOn: '',
       customerName: "Unknown",
       orderTotal: 0,
       orderLines: [],
-      blobPath: dbTransaction.blob_path
+      blobPath: ''
     }
   }
 }
