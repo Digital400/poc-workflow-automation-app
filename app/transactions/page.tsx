@@ -49,15 +49,35 @@ export default function TransactionsPage() {
 
   const handleSaveTransaction = async (updatedTransaction: Transaction) => {
     try {
-      // For now, we'll only update the status in the JSON
-      // In a real application, you might want to update more fields
+      // Check if this is a JSON view update (has all the original JSON data)
       const currentTransaction = transactions.find(t => t.id === updatedTransaction.id)
       if (!currentTransaction) return
       
-      // This is a simplified update - in practice you'd want to preserve all existing JSON data
-      // You would typically merge with existing JSON data here
+      // If the updated transaction has more fields than just the basic ones,
+      // it's likely a JSON view update
+      const isJsonUpdate = Object.keys(updatedTransaction).length > 10 // Basic fields + JSON data
       
-      await updateTransaction(updatedTransaction.id, { status: updatedTransaction.status })
+      if (isJsonUpdate) {
+        // For JSON view updates, we need to update the entire JSON in the database
+        // The updatedTransaction should contain the full JSON data
+        await updateTransaction(updatedTransaction.id, updatedTransaction)
+      } else {
+        // For default view updates, only update specific fields
+        const updateData: Partial<Transaction> = {}
+        
+        if (updatedTransaction.integrationService !== currentTransaction.integrationService) {
+          updateData.integrationService = updatedTransaction.integrationService
+        }
+        
+        if (updatedTransaction.status !== currentTransaction.status) {
+          updateData.status = updatedTransaction.status
+        }
+        
+        if (Object.keys(updateData).length > 0) {
+          await updateTransaction(updatedTransaction.id, updateData)
+        }
+      }
+      
       setIsDrawerOpen(false)
     } catch (error) {
       console.error('Failed to update transaction:', error)

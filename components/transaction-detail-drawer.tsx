@@ -14,7 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { DocumentPreview } from "@/components/ui/document-preview"
 import { Transaction } from "@/lib/types"
-import { Eye, Edit, Code, FileText } from "lucide-react"
+import { Eye, Edit, Code, FileText, X } from "lucide-react"
 
 interface TransactionDetailDrawerProps {
   transaction: Transaction | null
@@ -64,6 +64,7 @@ export function TransactionDetailDrawer({
   const [viewMode, setViewMode] = useState<"default" | "json">("default")
   const [jsonData, setJsonData] = useState<string>("")
   const [jsonError, setJsonError] = useState<string>("")
+  const [jsonModified, setJsonModified] = useState<boolean>(false)
 
   useEffect(() => {
     if (transaction) {
@@ -78,6 +79,7 @@ export function TransactionDetailDrawer({
       // Initialize JSON data
       setJsonData(JSON.stringify(transaction, null, 2))
       setJsonError("")
+      setJsonModified(false)
     }
   }, [transaction])
 
@@ -95,12 +97,33 @@ export function TransactionDetailDrawer({
   const handleJsonSave = () => {
     try {
       const parsedData = JSON.parse(jsonData)
+      
+      // Prevent changing the transaction ID
+      if (parsedData.id !== transaction?.id) {
+        setJsonError("Transaction ID cannot be changed")
+        return
+      }
+      
       if (transaction && onSave) {
+        // Validate required fields
+        if (!parsedData.integrationService || !parsedData.status) {
+          setJsonError("Integration service and status are required")
+          return
+        }
+        
+        // Validate status values
+        const validStatuses = ["pending", "processing", "completed", "failed"]
+        if (!validStatuses.includes(parsedData.status)) {
+          setJsonError("Invalid status value")
+          return
+        }
+        
         onSave(parsedData as Transaction)
+        setJsonModified(false)
         onOpenChange(false)
       }
       setJsonError("")
-    } catch {
+    } catch (error) {
       setJsonError("Invalid JSON format")
     }
   }
@@ -112,22 +135,45 @@ export function TransactionDetailDrawer({
         ...transaction,
         ...editData
       }
-      setJsonData(JSON.stringify(updatedTransaction, null, 2))
+      // Ensure the transaction ID is preserved
+      updatedTransaction.id = transaction.id
+      const newJsonData = JSON.stringify(updatedTransaction, null, 2)
+      setJsonData(newJsonData)
+      // Reset modified state since this is a programmatic update
+      setJsonModified(false)
     }
   }, [editData, transaction])
 
   const handleJsonChange = (value: string) => {
     setJsonData(value)
     setJsonError("")
+    
+    // Check if JSON has been modified from original
+    if (transaction) {
+      const originalJson = JSON.stringify(transaction, null, 2)
+      setJsonModified(value !== originalJson)
+    }
+    
     try {
       const parsedData = JSON.parse(value)
+      
+      // Ensure transaction ID is preserved
+      if (transaction && parsedData.id !== transaction.id) {
+        // Replace the ID with the original one
+        parsedData.id = transaction.id
+        setJsonData(JSON.stringify(parsedData, null, 2))
+      }
+      
       // Update the editData state to reflect JSON changes in default view
       setEditData({
         integrationService: parsedData.integrationService || transaction?.integrationService,
         status: parsedData.status || transaction?.status
       })
     } catch {
-      setJsonError("Invalid JSON format")
+      // Don't set error for partial JSON while typing
+      if (value.trim() !== "") {
+        setJsonError("Invalid JSON format")
+      }
     }
   }
 
@@ -137,7 +183,7 @@ export function TransactionDetailDrawer({
     <Drawer open={isOpen} onOpenChange={onOpenChange}>
       <DrawerContent>
         <div 
-          className="mx-auto w-full max-w-full px-12 overflow-y-auto"
+          className="mx-auto w-full max-w-full px-12 overflow-y-auto min-h-[75vh]"
           style={{
             imageRendering: 'crisp-edges',
             textRendering: 'optimizeLegibility',
@@ -146,13 +192,22 @@ export function TransactionDetailDrawer({
           }}
         >
           <DrawerHeader>
-            <DrawerTitle className="flex items-center gap-2">
-              {mode === "view" ? <Eye className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
-              {mode === "view" ? "View Transaction" : "Edit Transaction"}
-            </DrawerTitle>
-            <DrawerDescription>
-              Transaction details for {transaction.purchaseOrderReference || transaction.referenceValue}
-            </DrawerDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <DrawerTitle className="flex items-center gap-2">
+                  {mode === "view" ? <Eye className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
+                  {mode === "view" ? "View Transaction" : "Edit Transaction"}
+                </DrawerTitle>
+                <DrawerDescription>
+                  Transaction details for {transaction.purchaseOrderReference || transaction.referenceValue}
+                </DrawerDescription>
+              </div>
+              <DrawerClose asChild>
+                <Button variant="outline" size="sm">
+                  <X className="h-4 w-4" />
+                </Button>
+              </DrawerClose>
+            </div>
           </DrawerHeader>
 
           <div className="flex flex-row gap-4">
@@ -282,13 +337,26 @@ export function TransactionDetailDrawer({
               // JSON View
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Transaction JSON</label>
-                  <div className="relative">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-muted-foreground">Transaction JSON</label>
+                    {jsonModified && (
+                      <Badge variant="secondary" className="text-xs">
+                        Modified
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    {mode === "view" ? "Read-only view" : "Note: Transaction ID cannot be modified"}
+                  </div>
+                  <div className="relative h-full">
                     <textarea
                       value={jsonData}
                       onChange={(e) => handleJsonChange(e.target.value)}
-                      className="w-full h-96 p-3 font-mono text-sm bg-muted border rounded-md resize-none"
-                      placeholder="Enter JSON data..."
+                      disabled={mode === "view"}
+                      className={`w-full h-120 p-3 font-mono text-sm border rounded-md resize-none ${
+                        mode === "view" ? "bg-muted/50 cursor-not-allowed" : "bg-muted"
+                      }`}
+                      placeholder={mode === "view" ? "Read-only JSON view" : "Enter JSON data..."}
                     />
                     {jsonError && (
                       <div className="absolute bottom-2 right-2">
@@ -300,7 +368,7 @@ export function TransactionDetailDrawer({
                   </div>
                 </div>
                 
-                {mode === "edit" && (
+                {mode === "edit" && jsonModified && (
                   <Button 
                     onClick={handleJsonSave}
                     disabled={!!jsonError}
@@ -317,29 +385,6 @@ export function TransactionDetailDrawer({
           </div>
           
           <DrawerFooter>
-            {mode === "edit" && viewMode === "default" && (
-              <Button className="w-full" onClick={handleSave}>
-                Save Changes
-              </Button>
-            )}
-            {onDelete && (
-              <Button 
-                variant="destructive" 
-                className="w-full" 
-                onClick={() => {
-                  if (transaction && onDelete) {
-                    onDelete(transaction.id)
-                  }
-                }}
-              >
-                Delete Transaction
-              </Button>
-            )}
-            <DrawerClose asChild>
-              <Button variant="outline" className="w-full">
-                Close
-              </Button>
-            </DrawerClose>
           </DrawerFooter>
         </div>
       </DrawerContent>

@@ -54,7 +54,7 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
   }, [pdfUrl])
 
   return (
-    <div className={`p-4 space-y-4 bg-white border rounded-lg ${className}`}>
+    <div className={`p-4 space-y-4 bg-card border rounded-lg ${className}`}>
               <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -101,22 +101,22 @@ export function DocumentPreview({ pdfUrl, className = "" }: DocumentPreviewProps
         </div>
       </div>
       
-      <div className="border rounded-lg overflow-hidden bg-gray-50">
+      <div className="border rounded-lg overflow-hidden bg-muted">
         {pdfUrl && pdfUrl.trim() !== "" ? (
           <div className="relative overflow-auto" style={{ height: '500px' }}>
             {isLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+              <div className="absolute inset-0 flex items-center justify-center bg-muted">
                 <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground mx-auto mb-2"></div>
                   <p className="text-sm text-muted-foreground">Loading PDF...</p>
                 </div>
               </div>
             )}
             {hasError && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+              <div className="absolute inset-0 flex items-center justify-center bg-muted">
                 <div className="text-center">
                   <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm text-red-600">Failed to load PDF</p>
+                  <p className="text-sm text-destructive">Failed to load PDF</p>
                   <p className="text-xs text-muted-foreground">The document may be unavailable or restricted</p>
                 </div>
               </div>
